@@ -1,0 +1,41 @@
+{
+	"schemaVersion": 1,
+	"id": "regnum-world",
+	"version": "${version}",
+	"name": "Regnum World",
+	"description": "Regional crop growth advantages, ore geology and tree generation balancing by biome, roads, and wildlife.",
+	"authors": [
+		"Me!"
+	],
+	"contact": {
+		"homepage": "https://fabricmc.net/",
+		"sources": "https://github.com/FabricMC/fabric-example-mod"
+	},
+	"license": "CC0-1.0",
+	"icon": "assets/regnum-world/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"zooller.regnumworld.RegnumWorld"
+		],
+		"client": [
+			"zooller.regnumworld.client.RegnumWorldClient"
+		],
+		"fabric-datagen": [
+			"zooller.regnumworld.client.RegnumWorldDataGenerator"
+		]
+	},
+	"mixins": [
+		"regnum-world.mixins.json",
+		{
+			"config": "regnum-world.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.20.1",
+		"minecraft": "~1.21.1",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}
