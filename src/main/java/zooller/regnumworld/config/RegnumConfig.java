@@ -7,6 +7,7 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.MobCategory;
 import zooller.regnumworld.RegnumWorld;
+import zooller.regnumworld.service.RegionalMultiplierService;
 
 import java.io.File;
 import java.io.FileReader;
@@ -19,26 +20,6 @@ import java.util.Map;
 public class RegnumConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static RegnumConfig INSTANCE;
-
-    /**
-     * Enable road speed boost for players and mounts (native attribute modifier, no potion effect).
-     */
-    @SerializedName("roads_enabled")
-    public boolean roadsEnabled = true;
-
-    /**
-     * Speed bonus for Tier 1 roads (Dirt Path, Gravel, Cobblestone, Sandstone, Planks).
-     * 0.08 = subtle +8% movement speed.
-     */
-    @SerializedName("road_tier1_speed_bonus")
-    public double roadTier1SpeedBonus = 0.08;
-
-    /**
-     * Speed bonus for Tier 2 roads (Imperial Stone Bricks, Polished Deepslate, Smooth Stone, Bricks).
-     * 0.15 = subtle +15% movement speed.
-     */
-    @SerializedName("road_tier2_speed_bonus")
-    public double roadTier2SpeedBonus = 0.15;
 
     /**
      * Bone meal efficiency (0.5 = 50% chance of success, nerfed by half).
@@ -84,6 +65,12 @@ public class RegnumConfig {
     public double mountainAltitudeMultiplier = 0.5;
 
     /**
+     * Enables safe in-chunk placement of extra ore veins when ore multiplier > 1.0 without cross-chunk offsets.
+     */
+    @SerializedName("safe_extra_ore_worldgen_enabled")
+    public boolean safeExtraOreWorldgenEnabled = true;
+
+    /**
      * Global multipliers for ores across all biomes unless overridden by a specific biome.
      */
     @SerializedName("global_ore_multipliers")
@@ -117,18 +104,109 @@ public class RegnumConfig {
 
         if (configFile.exists()) {
             try (FileReader reader = new FileReader(configFile)) {
-                INSTANCE = GSON.fromJson(reader, RegnumConfig.class);
-                if (INSTANCE != null) {
-                    RegnumWorld.LOGGER.info("Regnum World configuration loaded successfully.");
+                RegnumConfig loaded = GSON.fromJson(reader, RegnumConfig.class);
+                if (loaded != null) {
+                    validateConfig(loaded);
+                    INSTANCE = loaded;
+                    RegnumWorld.LOGGER.info("Regnum World configuration loaded and validated successfully.");
                     return;
                 }
             } catch (Exception e) {
-                RegnumWorld.LOGGER.error("Failed to load Regnum World configuration, creating default.", e);
+                RegnumWorld.LOGGER.error("Failed to parse Regnum World configuration! Preserving damaged file on disk to prevent data loss. Error: {}", e.getMessage());
+                if (INSTANCE != null) {
+                    RegnumWorld.LOGGER.warn("Keeping previously loaded valid configuration in memory.");
+                    return;
+                }
+                RegnumWorld.LOGGER.warn("Falling back to default in-memory configuration without overwriting damaged file.");
+                INSTANCE = createDefaultConfig();
+                return;
             }
         }
 
         INSTANCE = createDefaultConfig();
         save();
+    }
+
+    public static void validateConfig(RegnumConfig config) {
+        if (config == null) return;
+
+        config.bonemealEfficiency = clampNumber("bonemeal_efficiency", config.bonemealEfficiency, 0.0, 1.0, 0.50);
+        config.mountainAltitudeMultiplier = clampNumber("mountain_altitude_multiplier", config.mountainAltitudeMultiplier, 0.0, 10.0, 0.5);
+
+        if (config.undergroundMaxY < -64 || config.undergroundMaxY > 320) {
+            RegnumWorld.LOGGER.warn("Invalid underground_max_y {}, resetting to 62.", config.undergroundMaxY);
+            config.undergroundMaxY = 62;
+        }
+
+        if (config.globalOreMultipliers == null) config.globalOreMultipliers = new HashMap<>();
+        if (config.biomeGrowth == null) config.biomeGrowth = new HashMap<>();
+        if (config.biomeWorldgen == null) config.biomeWorldgen = new HashMap<>();
+        if (config.biomeMobs == null) config.biomeMobs = new HashMap<>();
+        if (config.biomeFishing == null) config.biomeFishing = new HashMap<>();
+        if (config.biomeAnimalGrowth == null) config.biomeAnimalGrowth = new HashMap<>();
+
+        validateDoubleMap("global_ore_multipliers", config.globalOreMultipliers, 0.0, 100.0);
+        validateDoubleMap("biome_fishing_modifiers", config.biomeFishing, 0.0, 100.0);
+        validateDoubleMap("biome_animal_growth_modifiers", config.biomeAnimalGrowth, 0.0, 100.0);
+
+        for (Map.Entry<String, BiomeGrowthConfig> entry : config.biomeGrowth.entrySet()) {
+            BiomeGrowthConfig bg = entry.getValue();
+            if (bg != null) {
+                bg.defaultMultiplier = clampNumber("biomeGrowth.defaultMultiplier", bg.defaultMultiplier, 0.0, 100.0, 1.0);
+                if (bg.crops == null) bg.crops = new HashMap<>();
+                validateDoubleMap("biomeGrowth.crops", bg.crops, 0.0, 100.0);
+            }
+        }
+
+        for (Map.Entry<String, BiomeMobConfig> entry : config.biomeMobs.entrySet()) {
+            BiomeMobConfig bm = entry.getValue();
+            if (bm != null) {
+                bm.defaultMultiplier = clampNumber("biomeMobs.defaultMultiplier", bm.defaultMultiplier, 0.0, 100.0, 1.0);
+                bm.hostileMultiplier = clampNumber("biomeMobs.hostileMultiplier", bm.hostileMultiplier, 0.0, 100.0, 1.0);
+                bm.creatureMultiplier = clampNumber("biomeMobs.creatureMultiplier", bm.creatureMultiplier, 0.0, 100.0, 1.0);
+                bm.waterMultiplier = clampNumber("biomeMobs.waterMultiplier", bm.waterMultiplier, 0.0, 100.0, 1.0);
+                bm.ambientMultiplier = clampNumber("biomeMobs.ambientMultiplier", bm.ambientMultiplier, 0.0, 100.0, 1.0);
+                if (bm.mobs == null) bm.mobs = new HashMap<>();
+                validateDoubleMap("biomeMobs.mobs", bm.mobs, 0.0, 100.0);
+            }
+        }
+
+        for (Map.Entry<String, BiomeWorldgenConfig> entry : config.biomeWorldgen.entrySet()) {
+            BiomeWorldgenConfig bw = entry.getValue();
+            if (bw != null) {
+                bw.treeMultiplier = clampNumber("biomeWorldgen.treeMultiplier", bw.treeMultiplier, 0.0, 100.0, 1.0);
+                bw.flowerMultiplier = clampNumber("biomeWorldgen.flowerMultiplier", bw.flowerMultiplier, 0.0, 100.0, 1.0);
+                bw.grassMultiplier = clampNumber("biomeWorldgen.grassMultiplier", bw.grassMultiplier, 0.0, 100.0, 1.0);
+                if (bw.vegetationMultipliers == null) bw.vegetationMultipliers = new HashMap<>();
+                validateDoubleMap("biomeWorldgen.vegetationMultipliers", bw.vegetationMultipliers, 0.0, 100.0);
+                if (bw.oreMultipliers == null) bw.oreMultipliers = new HashMap<>();
+                validateDoubleMap("biomeWorldgen.oreMultipliers", bw.oreMultipliers, 0.0, 100.0);
+            }
+        }
+    }
+
+    private static double clampNumber(String field, Double val, double min, double max, double fallback) {
+        if (val == null || Double.isNaN(val) || Double.isInfinite(val)) {
+            RegnumWorld.LOGGER.warn("Configuration field '{}' had invalid value (null/NaN/Infinity), falling back to {}", field, fallback);
+            return fallback;
+        }
+        if (val < min) {
+            RegnumWorld.LOGGER.warn("Configuration field '{}' was below min ({}), clamping to {}", field, min, min);
+            return min;
+        }
+        if (val > max) {
+            RegnumWorld.LOGGER.warn("Configuration field '{}' exceeded max ({}), clamping to {}", field, max, max);
+            return max;
+        }
+        return val;
+    }
+
+    private static void validateDoubleMap(String mapName, Map<String, Double> map, double min, double max) {
+        if (map == null) return;
+        map.entrySet().removeIf(entry -> entry.getKey() == null || entry.getKey().trim().isEmpty());
+        for (Map.Entry<String, Double> entry : map.entrySet()) {
+            entry.setValue(clampNumber(mapName + "[" + entry.getKey() + "]", entry.getValue(), min, max, 1.0));
+        }
     }
 
     public static void save() {
@@ -147,72 +225,7 @@ public class RegnumConfig {
     }
 
     public String resolveBiomeKey(ResourceLocation biomeId) {
-        if (biomeId == null) {
-            return "";
-        }
-        String fullKey = biomeId.toString();
-        if (biomeGrowth.containsKey(fullKey) || biomeWorldgen.containsKey(fullKey) || biomeMobs.containsKey(fullKey)) {
-            return fullKey;
-        }
-
-        String path = biomeId.getPath().toLowerCase();
-        int lastSlash = path.lastIndexOf('/');
-        String name = (lastSlash >= 0 && lastSlash < path.length() - 1) ? path.substring(lastSlash + 1) : path;
-
-        String terraDirect = "terra:overworld/overworld/" + name;
-        if (biomeGrowth.containsKey(terraDirect) || biomeWorldgen.containsKey(terraDirect) || biomeMobs.containsKey(terraDirect)) {
-            return terraDirect;
-        }
-        String terraShort = "terra:" + name;
-        if (biomeGrowth.containsKey(terraShort) || biomeWorldgen.containsKey(terraShort) || biomeMobs.containsKey(terraShort)) {
-            return terraShort;
-        }
-        if (biomeGrowth.containsKey(name) || biomeWorldgen.containsKey(name) || biomeMobs.containsKey(name)) {
-            return name;
-        }
-
-        // Automatic thematic climate classification for all Terra & custom biomes
-        if (name.contains("tundra") || name.contains("frozen") || name.contains("ice") || name.contains("polar") || name.contains("iceberg")) {
-            return "minecraft:snowy_plains";
-        }
-        if (name.contains("desert") || name.contains("xeric") || name.contains("arid") || name.contains("salt")) {
-            return "minecraft:desert";
-        }
-        if (name.contains("badlands") || name.contains("mesa") || name.contains("terracotta") || name.contains("buttes")) {
-            return "minecraft:badlands";
-        }
-        if (name.contains("jungle") || name.contains("rainforest") || name.contains("monsoon")) {
-            return "minecraft:jungle";
-        }
-        if (name.contains("savanna")) {
-            return "minecraft:savanna";
-        }
-        if (name.contains("taiga") || name.contains("redwood") || name.contains("evergreen") || name.contains("boreal") || name.contains("yellowstone")) {
-            return "minecraft:taiga";
-        }
-        if (name.contains("swamp") || name.contains("marsh") || name.contains("wetlands")) {
-            return "minecraft:swamp";
-        }
-        if (name.contains("forest") || name.contains("wooded") || name.contains("autumnal") || name.contains("birch") || name.contains("eucalyptus")) {
-            return "minecraft:forest";
-        }
-        if (name.contains("mountain") || name.contains("highlands") || name.contains("peaks") || name.contains("cliffs") || name.contains("cerros")) {
-            return "minecraft:windswept_hills";
-        }
-        if (name.contains("volcano") || name.contains("caldera")) {
-            return "minecraft:nether_wastes";
-        }
-        if (name.contains("ocean") || name.contains("sea") || name.contains("beach") || name.contains("archipelago")) {
-            return "minecraft:ocean";
-        }
-        if (name.contains("plains") || name.contains("prairie") || name.contains("steppe") || name.contains("meadow") || name.contains("chaparral")) {
-            return "minecraft:plains";
-        }
-        if (name.contains("cave") || name.contains("dark")) {
-            return "minecraft:lush_caves";
-        }
-
-        return fullKey;
+        return RegionalMultiplierService.resolveBiomeKey(biomeId, this);
     }
 
     public BiomeGrowthConfig getGrowthConfig(ResourceLocation biomeId) {
@@ -231,26 +244,7 @@ public class RegnumConfig {
     }
 
     public double getCropMultiplier(ResourceLocation biomeId, ResourceLocation blockId) {
-        if (biomeId == null || blockId == null) {
-            return 1.0;
-        }
-
-        BiomeGrowthConfig config = getGrowthConfig(biomeId);
-        if (config == null) {
-            return 1.0;
-        }
-
-        String blockKey = blockId.toString();
-        if (config.crops.containsKey(blockKey)) {
-            return config.crops.get(blockKey);
-        }
-
-        String path = blockId.getPath();
-        if (config.crops.containsKey(path)) {
-            return config.crops.get(path);
-        }
-
-        return config.defaultMultiplier;
+        return RegionalMultiplierService.computeCropMultiplier(biomeId, blockId, null, false, this);
     }
 
     public double getTreeMultiplier(ResourceLocation biomeId) {
@@ -288,87 +282,23 @@ public class RegnumConfig {
     }
 
     public double getOreMultiplier(ResourceLocation biomeId, String oreCategory, ResourceLocation oreBlockId) {
-        if (biomeId != null) {
-            BiomeWorldgenConfig config = getWorldgenConfig(biomeId);
-            if (config != null) {
-                if (oreBlockId != null && config.oreMultipliers.containsKey(oreBlockId.toString())) {
-                    return config.oreMultipliers.get(oreBlockId.toString());
-                }
-
-                if (oreBlockId != null && config.oreMultipliers.containsKey(oreBlockId.getPath())) {
-                    return config.oreMultipliers.get(oreBlockId.getPath());
-                }
-
-                if (oreCategory != null && config.oreMultipliers.containsKey(oreCategory.toLowerCase())) {
-                    return config.oreMultipliers.get(oreCategory.toLowerCase());
-                }
-            }
-        }
-
-        // Global fallback for ores
-        if (oreBlockId != null && globalOreMultipliers.containsKey(oreBlockId.toString())) {
-            return globalOreMultipliers.get(oreBlockId.toString());
-        }
-
-        if (oreBlockId != null && globalOreMultipliers.containsKey(oreBlockId.getPath())) {
-            return globalOreMultipliers.get(oreBlockId.getPath());
-        }
-
-        if (oreCategory != null && globalOreMultipliers.containsKey(oreCategory.toLowerCase())) {
-            return globalOreMultipliers.get(oreCategory.toLowerCase());
-        }
-
-        return 1.0;
+        return RegionalMultiplierService.computeOreMultiplier(biomeId, oreBlockId, oreCategory, this);
     }
 
     public double getMobSpawnMultiplier(ResourceLocation biomeId, MobCategory category, ResourceLocation mobId) {
-        BiomeMobConfig config = getMobConfig(biomeId);
-        if (config == null) {
-            return 1.0;
-        }
-
-        if (mobId != null) {
-            if (config.mobs.containsKey(mobId.toString())) {
-                return config.mobs.get(mobId.toString());
-            }
-            if (config.mobs.containsKey(mobId.getPath())) {
-                return config.mobs.get(mobId.getPath());
-            }
-        }
-
-        if (category == MobCategory.MONSTER) {
-            return config.hostileMultiplier;
-        } else if (category == MobCategory.CREATURE) {
-            return config.creatureMultiplier;
-        } else if (category == MobCategory.WATER_CREATURE || category == MobCategory.WATER_AMBIENT) {
-            return config.waterMultiplier;
-        } else if (category == MobCategory.AMBIENT) {
-            return config.ambientMultiplier;
-        }
-
-        return config.defaultMultiplier;
+        return RegionalMultiplierService.computeMobSpawnMultiplier(biomeId, category, mobId, this);
     }
 
     public double getFishingMultiplier(ResourceLocation biomeId) {
-        if (biomeId == null) {
-            return 1.0;
-        }
-        return biomeFishing.getOrDefault(resolveBiomeKey(biomeId), 1.0);
+        return RegionalMultiplierService.computeFishingMultiplier(biomeId, this);
     }
 
     public double getAnimalGrowthMultiplier(ResourceLocation biomeId) {
-        if (biomeId == null) {
-            return 1.0;
-        }
-        return biomeAnimalGrowth.getOrDefault(resolveBiomeKey(biomeId), 1.0);
+        return RegionalMultiplierService.computeAnimalGrowthMultiplier(biomeId, this);
     }
 
     public static RegnumConfig createDefaultConfig() {
         RegnumConfig config = new RegnumConfig();
-
-        config.roadsEnabled = true;
-        config.roadTier1SpeedBonus = 0.08; // subtle +8% speed (no potion effects)
-        config.roadTier2SpeedBonus = 0.15; // subtle +15% speed (no potion effects)
 
         config.bonemealEfficiency = 0.50; // nerfed by 50%
         config.blockBonemealUnderground = true;

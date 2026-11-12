@@ -9,23 +9,22 @@ import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import zooller.regnumworld.api.RegnumWorldApi;
 import zooller.regnumworld.config.RegnumConfig;
+import zooller.regnumworld.service.RegionalMultiplierService;
 
 public class BoneMealHelper {
     public static void handleBonemeal(Level level, BlockPos pos, CallbackInfoReturnable<Boolean> cir) {
         RegnumConfig config = RegnumConfig.getInstance();
 
         // 1. Block bone meal in underground mines / dark caves
-        if (config.blockBonemealUnderground && config.blockUndergroundCropGrowth) {
-            boolean isUnderground = pos.getY() <= config.undergroundMaxY ||
-                    (config.blockCaveCropGrowthWithoutSky && !level.canSeeSky(pos));
-            if (isUnderground) {
-                cir.setReturnValue(false);
-                return;
-            }
+        boolean isUnderground = RegnumWorldApi.isUndergroundGrowthBlocked(level, pos);
+        if (config.blockBonemealUnderground && isUnderground) {
+            cir.setReturnValue(false);
+            return;
         }
 
-        // 2. Global ~50% nerf + regional adjustment
+        // 2. Global nerf + regional adjustment
         Holder<Biome> biomeHolder = level.getBiome(pos);
         ResourceLocation biomeId = biomeHolder.unwrapKey().map(k -> k.location()).orElse(null);
 
@@ -35,7 +34,7 @@ public class BoneMealHelper {
             BlockState state = level.getBlockState(pos);
             Block block = state.getBlock();
             ResourceLocation blockId = BuiltInRegistries.BLOCK.getKey(block);
-            double cropMult = config.getCropMultiplier(biomeId, blockId);
+            double cropMult = RegionalMultiplierService.computeCropMultiplier(biomeId, blockId, pos, isUnderground, config);
 
             // If crop completely cannot grow in this biome, bone meal also cannot force it
             if (cropMult <= 0.0) {

@@ -3,13 +3,14 @@
 	"id": "regnum-world",
 	"version": "${version}",
 	"name": "Regnum World",
-	"description": "Regional crop growth advantages, ore geology and tree generation balancing by biome, roads, and wildlife.",
+	"description": "Regional crop growth advantages, ore geology and tree generation balancing by biome, and wildlife.",
 	"authors": [
-		"Me!"
+		"zooller"
 	],
 	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
+		"homepage": "https://github.com/zooller/regnum-world",
+		"sources": "https://github.com/zooller/regnum-world",
+		"issues": "https://github.com/zooller/regnum-world/issues"
 	},
 	"license": "CC0-1.0",
 	"icon": "assets/regnum-world/icon.png",

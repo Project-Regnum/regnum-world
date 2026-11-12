@@ -2,20 +2,16 @@ package zooller.regnumworld.worldgen;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.biome.Biome;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.feature.ConfiguredFeature;
-import net.minecraft.world.level.levelgen.feature.configurations.OreConfiguration;
-import net.minecraft.world.level.levelgen.feature.configurations.RandomPatchConfiguration;
-import net.minecraft.world.level.levelgen.feature.configurations.TreeConfiguration;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import zooller.regnumworld.config.RegnumConfig;
+import zooller.regnumworld.service.RegionalMultiplierService;
 
 public class WorldgenHelper {
     private static final ThreadLocal<Boolean> IS_EXTRA_WORLDGEN = ThreadLocal.withInitial(() -> false);
@@ -38,106 +34,37 @@ public class WorldgenHelper {
             return;
         }
 
-        Holder<ConfiguredFeature<?, ?>> featureHolder = placedFeature.feature();
-        if (featureHolder == null || !featureHolder.isBound()) {
-            return;
-        }
-
-        ConfiguredFeature<?, ?> configuredFeature = featureHolder.value();
-        Object config = configuredFeature.config();
-        String featurePath = featureHolder.unwrapKey().map(k -> k.location().getPath()).orElse("");
-
-        boolean isTree = config instanceof TreeConfiguration || featurePath.contains("tree");
-        boolean isOre = config instanceof OreConfiguration || featurePath.contains("ore");
-        boolean isFlower = featurePath.contains("flower") || featurePath.contains("sunflower") ||
-                featurePath.contains("rose_bush") || featurePath.contains("lilac") || featurePath.contains("peony");
-        boolean isGrass = featurePath.contains("grass") || featurePath.contains("fern");
-        boolean isDeadBush = featurePath.contains("dead_bush");
-
-        // Inspect RandomPatchConfiguration for flowers/grass/bushes
-        if (config instanceof RandomPatchConfiguration patch) {
-            Holder<PlacedFeature> innerHolder = patch.feature();
-            if (innerHolder != null && innerHolder.isBound()) {
-                String innerPath = innerHolder.unwrapKey().map(k -> k.location().getPath()).orElse("");
-                if (innerPath.contains("flower") || innerPath.contains("sunflower") || innerPath.contains("rose")) {
-                    isFlower = true;
-                } else if (innerPath.contains("grass") || innerPath.contains("fern")) {
-                    isGrass = true;
-                } else if (innerPath.contains("dead_bush")) {
-                    isDeadBush = true;
-                }
-            }
-        }
-
-        String oreCategory = null;
-        ResourceLocation oreBlockId = null;
-
-        if (isOre) {
-            if (config instanceof OreConfiguration oreConfig) {
-                for (OreConfiguration.TargetBlockState target : oreConfig.targetStates) {
-                    Block targetBlock = target.state.getBlock();
-                    oreBlockId = BuiltInRegistries.BLOCK.getKey(targetBlock);
-                    String name = oreBlockId.getPath();
-                    if (name.contains("coal")) oreCategory = "coal";
-                    else if (name.contains("iron")) oreCategory = "iron";
-                    else if (name.contains("copper")) oreCategory = "copper";
-                    else if (name.contains("gold")) oreCategory = "gold";
-                    else if (name.contains("redstone")) oreCategory = "redstone";
-                    else if (name.contains("diamond")) oreCategory = "diamond";
-                    else if (name.contains("lapis")) oreCategory = "lapis";
-                    else if (name.contains("emerald")) oreCategory = "emerald";
-                    else if (name.contains("quartz")) oreCategory = "quartz";
-                    else if (name.contains("debris")) oreCategory = "debris";
-
-                    if (oreCategory != null) {
-                        break;
-                    }
-                }
-            }
-
-            if (oreCategory == null) {
-                if (featurePath.contains("coal")) oreCategory = "coal";
-                else if (featurePath.contains("iron")) oreCategory = "iron";
-                else if (featurePath.contains("copper")) oreCategory = "copper";
-                else if (featurePath.contains("gold")) oreCategory = "gold";
-                else if (featurePath.contains("redstone")) oreCategory = "redstone";
-                else if (featurePath.contains("diamond")) oreCategory = "diamond";
-                else if (featurePath.contains("lapis")) oreCategory = "lapis";
-                else if (featurePath.contains("emerald")) oreCategory = "emerald";
-                else if (featurePath.contains("quartz")) oreCategory = "quartz";
-                else if (featurePath.contains("debris")) oreCategory = "debris";
-            }
-        }
-
+        WorldgenTypeResolver.ClassificationResult classification = WorldgenTypeResolver.classify(placedFeature);
         RegnumConfig regnumConfig = RegnumConfig.getInstance();
         double multiplier = 1.0;
 
-        if (isOre) {
-            multiplier = regnumConfig.getOreMultiplier(biomeId, oreCategory, oreBlockId);
-        } else if (isTree) {
-            multiplier = regnumConfig.getTreeMultiplier(biomeId);
-        } else if (isFlower) {
-            multiplier = regnumConfig.getFlowerMultiplier(biomeId);
-        } else if (isGrass) {
-            multiplier = regnumConfig.getGrassMultiplier(biomeId);
-        } else if (isDeadBush) {
-            multiplier = regnumConfig.getVegetationMultiplier(biomeId, "dead_bush", null);
-        } else {
-            // Check specific vegetation or feature path
-            multiplier = regnumConfig.getVegetationMultiplier(biomeId, featurePath, null);
+        switch (classification.category) {
+            case ORE -> multiplier = RegionalMultiplierService.computeOreMultiplier(
+                    biomeId,
+                    classification.blockId,
+                    classification.oreType,
+                    regnumConfig
+            );
+            case TREE -> multiplier = regnumConfig.getTreeMultiplier(biomeId);
+            case FLOWER -> multiplier = regnumConfig.getFlowerMultiplier(biomeId);
+            case GRASS -> multiplier = regnumConfig.getGrassMultiplier(biomeId);
+            case DEAD_BUSH -> multiplier = regnumConfig.getVegetationMultiplier(biomeId, "dead_bush", null);
+            default -> {
+                return; // Let standard worldgen proceed unaffected
+            }
         }
 
         if (Math.abs(multiplier - 1.0) < 0.0001) {
             return;
         }
 
-        // Completely disable feature if multiplier is 0 or less
+        // Disable feature if multiplier is 0 or negative
         if (multiplier <= 0.0) {
             cir.setReturnValue(false);
             return;
         }
 
-        // Reduce frequency
+        // Multiplier < 1.0: pure probabilistic filter (skip generation chance)
         if (multiplier < 1.0) {
             if (random.nextDouble() >= multiplier) {
                 cir.setReturnValue(false);
@@ -145,25 +72,37 @@ public class WorldgenHelper {
             return;
         }
 
-        // Increase frequency (> 1.0)
-        double extra = multiplier - 1.0;
-        int guaranteedExtra = (int) extra;
-        double fractional = extra - guaranteedExtra;
+        // Multiplier > 1.0:
+        // For non-ores, we do not perform unsafe repeated feature placement to prevent worldgen conflicts.
+        // For ores, safely place additional veins strictly inside the chunk boundaries without invoking PlacedFeature.place()
+        if (classification.category == WorldgenTypeResolver.FeatureCategory.ORE && regnumConfig.safeExtraOreWorldgenEnabled) {
+            double extra = multiplier - 1.0;
+            int guaranteedExtra = (int) extra;
+            double fractional = extra - guaranteedExtra;
+            int extraCount = Math.min(2, guaranteedExtra + (fractional > 0 && random.nextDouble() < fractional ? 1 : 0));
 
-        int extraCount = guaranteedExtra + (fractional > 0 && random.nextDouble() < fractional ? 1 : 0);
+            if (extraCount > 0) {
+                Holder<ConfiguredFeature<?, ?>> featureHolder = placedFeature.feature();
+                if (featureHolder != null && featureHolder.isBound()) {
+                    ConfiguredFeature<?, ?> configured = featureHolder.value();
+                    IS_EXTRA_WORLDGEN.set(true);
+                    try {
+                        int chunkOriginX = (pos.getX() >> 4) << 4;
+                        int chunkOriginZ = (pos.getZ() >> 4) << 4;
 
-        if (extraCount > 0) {
-            IS_EXTRA_WORLDGEN.set(true);
-            try {
-                for (int i = 0; i < extraCount; i++) {
-                    int dx = random.nextInt(15) - 7;
-                    int dz = random.nextInt(15) - 7;
-                    int dy = random.nextInt(5) - 2;
-                    BlockPos newPos = pos.offset(dx, dy, dz);
-                    placedFeature.place(level, generator, random, newPos);
+                        for (int i = 0; i < extraCount; i++) {
+                            // Keep coordinates strictly inside the current 16x16 chunk to avoid chunk border cascading
+                            int localX = chunkOriginX + random.nextInt(16);
+                            int localZ = chunkOriginZ + random.nextInt(16);
+                            int localY = pos.getY() + random.nextInt(9) - 4;
+
+                            BlockPos safeChunkPos = new BlockPos(localX, localY, localZ);
+                            configured.place(level, generator, random, safeChunkPos);
+                        }
+                    } finally {
+                        IS_EXTRA_WORLDGEN.set(false);
+                    }
                 }
-            } finally {
-                IS_EXTRA_WORLDGEN.set(false);
             }
         }
     }

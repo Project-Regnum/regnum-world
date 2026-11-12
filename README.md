@@ -6,12 +6,6 @@ A comprehensive Minecraft mod designed to establish regional economic balance, p
 
 ## 🌟 Key Features
 
-### 🛣️ Roads and Trade Routes (Road Speed Boost)
-- Walking or riding mounts along paved roads and dirt tracks grants a clean, **native movement speed attribute modifier** (no potion effects, no particle clutter, and no sudden FOV distortions):
-  - **Tier 1 (Country Roads & Trails)**: Dirt paths (`minecraft:dirt_path`), gravel, wooden planks → **+8% speed boost** (`0.08`);
-  - **Tier 2 (Paved Highways & Stone Causeways)**: Stone bricks, cobblestone, polished deepslate, smooth stone, bricks → **+15% speed boost** (`0.15`);
-- Smoothly applies to both the player on foot and ridden mounts (horses, donkeys, camels, mules).
-
 ### 🌾 Regional Agriculture & Crop Growth
 - Crops thrive in fertile, temperate climates while suffering steep debuffs in harsh regions.
 - In snowy plains, ice spikes, and arid deserts, standard cereals and vegetables barely grow (`0.0x` - `0.1x`).
@@ -67,10 +61,6 @@ All multipliers, biome tables, road blocks, and thresholds are fully customizabl
 
 ```json
 {
-  "roads_enabled": true,
-  "road_tier1_speed_bonus": 0.08,
-  "road_tier2_speed_bonus": 0.15,
-
   "bonemeal_efficiency": 0.50,
   "block_bonemeal_underground": true,
 
@@ -84,9 +74,31 @@ All multipliers, biome tables, road blocks, and thresholds are fully customizabl
 
   "global_ore_multipliers": {
     "diamond": 0.10
-  }
+  },
+  "safe_extra_ore_worldgen_enabled": true
 }
 ```
+
+---
+
+## 🤝 Mod Integration & Developer API (`RegnumWorldApi`)
+
+Regnum World exposes a clean, thread-safe public API (`zooller.regnumworld.api.RegnumWorldApi`) for seamless compatibility with companion mods like **Regnum Agriculture**:
+
+- **Query Regional Multipliers**:
+  - `RegnumWorldApi.getRegionalCropMultiplier(biomeId, blockId)`: retrieves the configured multiplier for a crop in a biome.
+  - `RegnumWorldApi.getFinalCropMultiplier(level, pos, state)`: evaluates full multiplier including altitude debuff and underground restriction.
+  - `RegnumWorldApi.isUndergroundGrowthBlocked(level, pos)`: returns `true` if underground/cave growth restrictions apply.
+- **Growth Controller Negotiation**:
+  - `RegnumWorldApi.registerGrowthController(ExternalGrowthController)`: allows companion mods (such as Regnum Agriculture) to intercept random growth ticks, apply combined seasonal & regional formulas, and decide whether to handle, cancel, or pass the growth event without tick collision or race conditions.
+
+---
+
+## ⚖️ Plant Growth Adapters & Probabilistic Scaling
+
+Rather than relying on re-entrant recursive ticks (which cause race conditions and stack overflows), Regnum World uses specialized block growth adapters (`CactusGrowthAdapter`, `BambooGrowthAdapter`, `SugarCaneGrowthAdapter`, `CropGrowthAdapter`, `StemGrowthAdapter`, `SweetBerryBushGrowthAdapter`, `CocoaGrowthAdapter`, `NetherWartGrowthAdapter`, `SaplingGrowthAdapter`):
+- **Debuffed growth ($M < 1.0$)**: probabilistic tick cancellation proportionally extending crop lifecycles.
+- **Accelerated growth ($M > 1.0$)**: deterministic stage advancement scaling expected progress per tick without extra recursive game ticks. Discrete 1-block plants (e.g. bamboo) cap single-tick probability at 100% (3x speedup per tick).
 
 ---
 

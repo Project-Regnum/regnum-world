@@ -10,25 +10,24 @@ import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import zooller.regnumworld.api.ExternalGrowthController;
+import zooller.regnumworld.api.GrowthResult;
+import zooller.regnumworld.api.RegnumWorldApi;
 import zooller.regnumworld.config.RegnumConfig;
+import zooller.regnumworld.growth.adapter.PlantGrowthAdapter;
+import zooller.regnumworld.growth.adapter.PlantGrowthAdapters;
+import zooller.regnumworld.service.RegionalMultiplierService;
 
 public class GrowthHelper {
-    private static final ThreadLocal<Boolean> IS_EXTRA_TICK = ThreadLocal.withInitial(() -> false);
 
     public static void handleRandomTick(Block block, BlockState state, ServerLevel level, BlockPos pos, RandomSource random, CallbackInfo ci) {
-        if (IS_EXTRA_TICK.get()) {
-            return;
-        }
-
         RegnumConfig config = RegnumConfig.getInstance();
 
-        // Check underground / mine restrictions (Overworld only)
-        if (config.blockUndergroundCropGrowth) {
-            // Below sea level or inside cave without direct sky access
-            if (pos.getY() <= config.undergroundMaxY || (config.blockCaveCropGrowthWithoutSky && !level.canSeeSky(pos))) {
-                ci.cancel();
-                return;
-            }
+        // 1. Check underground / mine restrictions (Overworld only)
+        boolean isUnderground = RegnumWorldApi.isUndergroundGrowthBlocked(level, pos);
+        if (isUnderground) {
+            ci.cancel();
+            return;
         }
 
         Holder<Biome> biomeHolder = level.getBiome(pos);
@@ -38,47 +37,41 @@ public class GrowthHelper {
         }
 
         ResourceLocation blockId = BuiltInRegistries.BLOCK.getKey(block);
-        double multiplier = config.getCropMultiplier(biomeId, blockId);
+        double multiplier = RegionalMultiplierService.computeCropMultiplier(biomeId, blockId, pos, isUnderground, config);
 
-        // Apply mountain altitude debuff if applicable
-        if (config.mountainAltitudeDebuffEnabled && pos.getY() >= config.mountainAltitudeStartY) {
-            multiplier *= config.mountainAltitudeMultiplier;
+        // 2. Negotiate with registered external growth controllers (e.g. Regnum Agriculture)
+        for (ExternalGrowthController controller : RegnumWorldApi.getControllers()) {
+            GrowthResult result = controller.onRandomTick(state, level, pos, random, multiplier);
+            if (result == GrowthResult.HANDLED || result == GrowthResult.CANCEL) {
+                ci.cancel();
+                return;
+            }
         }
 
-        // 1.0 means standard vanilla rate
-        if (Math.abs(multiplier - 1.0) < 0.0001) {
-            return;
-        }
-
-        // 0 or negative means no growth
+        // 3. Multiplier <= 0: plant cannot grow
         if (multiplier <= 0.0) {
             ci.cancel();
             return;
         }
 
-        // Less than 1.0: slow down by skipping ticks
-        if (multiplier < 1.0) {
-            if (random.nextDouble() >= multiplier) {
+        // 4. Dispatch to dedicated plant adapter
+        PlantGrowthAdapter adapter = PlantGrowthAdapters.getAdapter(block);
+        if (adapter != null) {
+            boolean cancelTick = adapter.handleGrowth(block, state, level, pos, random, multiplier);
+            if (cancelTick) {
                 ci.cancel();
             }
             return;
         }
 
-        // Greater than 1.0: allow the current tick and execute extra ticks
-        double extra = multiplier - 1.0;
-        int guaranteedExtra = (int) extra;
-        double fractional = extra - guaranteedExtra;
+        // 5. Fallback for generic randomly ticking plants without specific adapter
+        if (Math.abs(multiplier - 1.0) < 0.0001) {
+            return; // Normal vanilla growth
+        }
 
-        int extraTicks = guaranteedExtra + (fractional > 0 && random.nextDouble() < fractional ? 1 : 0);
-
-        if (extraTicks > 0) {
-            IS_EXTRA_TICK.set(true);
-            try {
-                for (int i = 0; i < extraTicks; i++) {
-                    state.randomTick(level, pos, random);
-                }
-            } finally {
-                IS_EXTRA_TICK.set(false);
+        if (multiplier < 1.0) {
+            if (random.nextDouble() >= multiplier) {
+                ci.cancel();
             }
         }
     }

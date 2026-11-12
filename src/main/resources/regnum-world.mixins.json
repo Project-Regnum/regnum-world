@@ -17,8 +17,10 @@
 		"FishingHookMixin",
 		"BoneMealItemMixin",
 		"AgeableMobMixin",
-		"ServerPlayerRoadMixin",
-		"RegistryDataLoaderMixin"
+		"RegistryDataLoaderMixin",
+		"CropBlockInvoker",
+		"BambooStalkBlockInvoker",
+		"StemBlockAccessor"
 	],
 	"injectors": {
 		"defaultRequire": 1
