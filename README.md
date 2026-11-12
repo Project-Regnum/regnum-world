@@ -1,34 +1,69 @@
 # Regnum World (Fabric 1.21.1)
 
-Комплексный мод для создания регионального экономического баланса провинций в Minecraft:
-- **🛣️ Дороги и торговые тракты (Road Speed Boost)**:
-  - Передвижение по дорогам пешком или верхом на животных даёт аккуратный **нативный модификатор скорости** (без эффектов зелий, частиц и дергания FOV):
-    - **1-й уровень (Просёлочные дороги и тропы)**: земляная тропинка (`dirt_path`), гравий, деревянные настилы/доски → **+8% скорости** (`0.08`);
-    - **2-й уровень (Мощёные тракты и мостовые)**: каменный кирпич, булыжник, полированный сланец, гладкий камень, кирпич → **+15% скорости** (`0.15`);
-  - Бонус плавно применяется к игроку и его верховому животному при движении по трактам.
-- **Сельское хозяйство по регионам**: в благоприятных биомах урожай растет быстро, в суровых — с сильными штрафами. В снежных биомах и пустынях крупы практически не растут (`0.0x` - `0.1x`).
-- **Запрет ферм в шахтах (Underground Block)**: под землей, в шахтах и пещерах без солнечного света растения **не растут вовсе** (`0.0x`).
-- **Ослабление костной муки на 50% и защита от абузов**:
-  - Базовая эффективность костной муки снижена на **50%**;
-  - В шахтах, пещерах и под землей костная мука **не работает вовсе**;
-  - В суровых регионах эффективность муки дополнительно снижается соразмерно климату.
-- **Региональное животноводство (Animal Husbandry)**:
-  - На сочных пастбищах (Равнины, Луга, Леса, Саванны) детёныши скота (телята, ягнята, поросята, цыплята) взрослеют и восстанавливают готовность к размножению **в 1.8x - 2.0x быстрее**;
-  - В суровых снегах, на льду и в пустынях взросление и разведение скота занимает **в 2-3 раза больше времени** (`0.3x` - `0.5x`).
-- **Горные дебаффы**: горы и пики имеют сильный дебафф к росту культур, а также высотный штраф разреженного воздуха выше Y=95 (`0.5x`).
-- **Региональная рыбалка (Fishing Speed)**: сбалансированный темп клева рыбы — в реках, теплых океанах и болотах рыба клюет быстрее (`1.15x` - `1.50x`), а в пустынях, снегах и замерзших водоемах — намного дольше (`0.2x` - `0.4x`).
-- **Геологический баланс руд**:
-  - **Алмазы**: сделаны убер-редкими по всему миру (`0.10x` глобально, `0.05x` в снегах/пустынях);
-  - **Лазурит & Золото**: изобилие в Месе (`3.5x` золото, `2.6x` лазурит) и Пустыне;
-  - **Изумруды & Железо**: столица в Горах и Пиках (`3.5x` - `4.0x` изумруды, `2.2x` железо);
-  - **Болотная руда (Bog Iron)**: болота дают `2.5x` железа;
-  - **Уголь**: древние лесные массивы дают `2.4x` - `2.6x` угля.
-- **Спавн-рейт мобов**: в благоприятных регионах спавнится изобилие скота (`2.0x` - `2.5x`), а в пустынях и снежных равнинах — лишь редкие выживающие существа (`0.15x` - `0.2x`).
-- **Мультиязычность**: полная локализация на **украинский**, **русский** и **английский** языки.
+A comprehensive Minecraft mod designed to establish regional economic balance, provincial specialization, and realistic geographic trade dynamics.
 
 ---
 
-## ⚙️ Конфигурация (`config/regnum_world.json`)
+## 🌟 Key Features
+
+### 🛣️ Roads and Trade Routes (Road Speed Boost)
+- Walking or riding mounts along paved roads and dirt tracks grants a clean, **native movement speed attribute modifier** (no potion effects, no particle clutter, and no sudden FOV distortions):
+  - **Tier 1 (Country Roads & Trails)**: Dirt paths (`minecraft:dirt_path`), gravel, wooden planks → **+8% speed boost** (`0.08`);
+  - **Tier 2 (Paved Highways & Stone Causeways)**: Stone bricks, cobblestone, polished deepslate, smooth stone, bricks → **+15% speed boost** (`0.15`);
+- Smoothly applies to both the player on foot and ridden mounts (horses, donkeys, camels, mules).
+
+### 🌾 Regional Agriculture & Crop Growth
+- Crops thrive in fertile, temperate climates while suffering steep debuffs in harsh regions.
+- In snowy plains, ice spikes, and arid deserts, standard cereals and vegetables barely grow (`0.0x` - `0.1x`).
+- Specialized indigenous crops receive regional bonuses (e.g., sweet berries in cold tundras, cacti in deserts, cocoa and melons in jungles).
+
+### ⛏️ Underground Farming Restrictions
+- Eliminates underground automated farms: crops grown underground, in mines, or deep caves without direct sky access **will not grow** (`0.0x`).
+- Configurable maximum Y-level (`underground_max_y`) and sky-access check (`block_cave_crop_growth_without_sky`).
+
+### 🦴 Bonemeal Balancing & Abuse Prevention
+- Base bonemeal growth boost is reduced by **50%** to prevent rapid farming exploits.
+- In underground mines and dark caves, bonemeal **does not work at all**.
+- In harsh biomes, bonemeal efficiency scales proportionally with the local climate multiplier.
+
+### 🐄 Regional Animal Husbandry
+- In fertile pasturelands (Plains, Meadows, Forests, Savannas), livestock offspring (calves, lambs, piglets, chicks) mature and regain breeding readiness **1.8x - 2.0x faster**.
+- In frozen tundras, mountains, and arid deserts, breeding and livestock maturation takes **2 to 3 times longer** (`0.3x` - `0.5x`).
+
+### 🏔️ Mountain Altitude Debuff
+- Mountain peaks impose severe crop penalties and an altitude debuff representing thin mountain air above Y=95 (`0.5x` modifier).
+
+### 🎣 Regional Fishing Speed
+- Dynamic bite rates reflecting aquatic ecology:
+  - Rivers, warm oceans, and swamps boast increased fishing speeds (`1.15x` - `1.50x`);
+  - Deserts, frozen rivers, and polar oceans feature significantly slower bite rates (`0.2x` - `0.4x`).
+
+### 💎 Geological Ore Balance
+- Promotes inter-regional commerce and mining expeditions by concentrating ore generation:
+  - **Diamonds**: Exceptionally rare globally (`0.10x` global rate, down to `0.05x` in snowy peaks and deserts);
+  - **Gold & Lapis**: Abundant in Badlands/Mesa (`3.5x` gold, `2.6x` lapis) and Deserts;
+  - **Emeralds & Iron**: Centered in Mountain Peaks (`3.5x` - `4.0x` emeralds, `2.2x` iron);
+  - **Bog Iron**: Swamps yield rich surface and sub-surface iron (`2.5x`);
+  - **Coal**: Ancient forested basins yield rich coal deposits (`2.4x` - `2.6x`).
+
+### 🐺 Regional Mob Spawning
+- Temperate regions sustain rich wildlife populations (`1.8x` - `2.5x` animal spawns).
+- Arid and polar wastes yield scarce wildlife (`0.15x` - `0.2x`), populated primarily by climate-hardened hostile creatures (husks, strays, polar bears).
+
+### 🌍 Terra World Generator Compatibility
+- **Full out-of-the-box integration** with the [Terra](https://github.com/PolyhedralDev/Terra) world generation platform (`terra:overworld/overworld`).
+- Dynamic registry injection enables the Terra world preset in world creation seamlessly.
+- **Smart Climate Archetype Resolution**: Over 100+ Terra custom biomes (`tundra_hills`, `rainforest`, `desert_spikes`, `autumnal_forest`, `active_volcano`, etc.) automatically inherit balanced regional profiles matching their thematic climate.
+- Direct per-biome overrides supported in the configuration file using either vanilla IDs (`minecraft:forest`) or Terra IDs (`terra:overworld/overworld/tundra_hills`).
+
+### 🌐 Multilingual Support
+- Fully localized in **English (`en_us`)**, **Ukrainian (`uk_ua`)**, and **Russian (`ru_ru`)**.
+
+---
+
+## ⚙️ Configuration (`config/regnum_world.json`)
+
+All multipliers, biome tables, road blocks, and thresholds are fully customizable:
 
 ```json
 {
@@ -42,22 +77,51 @@
   "block_underground_crop_growth": true,
   "underground_max_y": 62,
   "block_cave_crop_growth_without_sky": true,
+
   "mountain_altitude_debuff_enabled": true,
   "mountain_altitude_start_y": 95,
-  "mountain_altitude_multiplier": 0.5
+  "mountain_altitude_multiplier": 0.5,
+
+  "global_ore_multipliers": {
+    "diamond": 0.10
+  }
 }
 ```
 
 ---
 
-## 🎮 Команды в игре
+## 🎮 In-Game Commands
 
-* `/regnum info` (или `/rw info`) — полная сводка по региону игрока.
-* `/regnum reload` (или `/rw reload`) — перезагрузка конфига на сервере на лету.
+* `/regnum info` (or `/rw info`): Displays an interactive breakdown of the player's current region, including:
+  - Localized biome name and identifier;
+  - Underground / cave blocking status;
+  - Base crop growth & regional specialty crop bonuses;
+  - Vegetation growth multipliers (trees, flowers, grass);
+  - Mineral ore spawn rates;
+  - Animal & monster spawn modifiers;
+  - Livestock maturation rate;
+  - Fishing speed.
+* `/regnum reload` (or `/rw reload`): Reloads `config/regnum_world.json` on the server dynamically without needing a server restart (requires OP level 2).
 
 ---
 
-## 📦 Сборка мода
+## 🛠️ Building & Installation
 
-Готовый `.jar` файл:
+### Requirements
+- **Java 21** or newer
+- **Fabric Loader 0.16.0+**
+- **Fabric API**
+- **Minecraft 1.21.1**
+
+### Build from Source
+```bash
+# Clone the repository
+git clone https://github.com/zooller/regnum-world.git
+cd regnum-world
+
+# Build with Gradle wrapper
+./gradlew build --no-configuration-cache
+```
+
+The compiled mod JAR will be located at:
 `build/libs/regnum-world-1.0.0.jar`

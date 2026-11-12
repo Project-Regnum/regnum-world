@@ -17,7 +17,8 @@
 		"FishingHookMixin",
 		"BoneMealItemMixin",
 		"AgeableMobMixin",
-		"ServerPlayerRoadMixin"
+		"ServerPlayerRoadMixin",
+		"RegistryDataLoaderMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

@@ -146,13 +146,96 @@ public class RegnumConfig {
         }
     }
 
+    public String resolveBiomeKey(ResourceLocation biomeId) {
+        if (biomeId == null) {
+            return "";
+        }
+        String fullKey = biomeId.toString();
+        if (biomeGrowth.containsKey(fullKey) || biomeWorldgen.containsKey(fullKey) || biomeMobs.containsKey(fullKey)) {
+            return fullKey;
+        }
+
+        String path = biomeId.getPath().toLowerCase();
+        int lastSlash = path.lastIndexOf('/');
+        String name = (lastSlash >= 0 && lastSlash < path.length() - 1) ? path.substring(lastSlash + 1) : path;
+
+        String terraDirect = "terra:overworld/overworld/" + name;
+        if (biomeGrowth.containsKey(terraDirect) || biomeWorldgen.containsKey(terraDirect) || biomeMobs.containsKey(terraDirect)) {
+            return terraDirect;
+        }
+        String terraShort = "terra:" + name;
+        if (biomeGrowth.containsKey(terraShort) || biomeWorldgen.containsKey(terraShort) || biomeMobs.containsKey(terraShort)) {
+            return terraShort;
+        }
+        if (biomeGrowth.containsKey(name) || biomeWorldgen.containsKey(name) || biomeMobs.containsKey(name)) {
+            return name;
+        }
+
+        // Automatic thematic climate classification for all Terra & custom biomes
+        if (name.contains("tundra") || name.contains("frozen") || name.contains("ice") || name.contains("polar") || name.contains("iceberg")) {
+            return "minecraft:snowy_plains";
+        }
+        if (name.contains("desert") || name.contains("xeric") || name.contains("arid") || name.contains("salt")) {
+            return "minecraft:desert";
+        }
+        if (name.contains("badlands") || name.contains("mesa") || name.contains("terracotta") || name.contains("buttes")) {
+            return "minecraft:badlands";
+        }
+        if (name.contains("jungle") || name.contains("rainforest") || name.contains("monsoon")) {
+            return "minecraft:jungle";
+        }
+        if (name.contains("savanna")) {
+            return "minecraft:savanna";
+        }
+        if (name.contains("taiga") || name.contains("redwood") || name.contains("evergreen") || name.contains("boreal") || name.contains("yellowstone")) {
+            return "minecraft:taiga";
+        }
+        if (name.contains("swamp") || name.contains("marsh") || name.contains("wetlands")) {
+            return "minecraft:swamp";
+        }
+        if (name.contains("forest") || name.contains("wooded") || name.contains("autumnal") || name.contains("birch") || name.contains("eucalyptus")) {
+            return "minecraft:forest";
+        }
+        if (name.contains("mountain") || name.contains("highlands") || name.contains("peaks") || name.contains("cliffs") || name.contains("cerros")) {
+            return "minecraft:windswept_hills";
+        }
+        if (name.contains("volcano") || name.contains("caldera")) {
+            return "minecraft:nether_wastes";
+        }
+        if (name.contains("ocean") || name.contains("sea") || name.contains("beach") || name.contains("archipelago")) {
+            return "minecraft:ocean";
+        }
+        if (name.contains("plains") || name.contains("prairie") || name.contains("steppe") || name.contains("meadow") || name.contains("chaparral")) {
+            return "minecraft:plains";
+        }
+        if (name.contains("cave") || name.contains("dark")) {
+            return "minecraft:lush_caves";
+        }
+
+        return fullKey;
+    }
+
+    public BiomeGrowthConfig getGrowthConfig(ResourceLocation biomeId) {
+        if (biomeId == null) return null;
+        return biomeGrowth.get(resolveBiomeKey(biomeId));
+    }
+
+    public BiomeWorldgenConfig getWorldgenConfig(ResourceLocation biomeId) {
+        if (biomeId == null) return null;
+        return biomeWorldgen.get(resolveBiomeKey(biomeId));
+    }
+
+    public BiomeMobConfig getMobConfig(ResourceLocation biomeId) {
+        if (biomeId == null) return null;
+        return biomeMobs.get(resolveBiomeKey(biomeId));
+    }
+
     public double getCropMultiplier(ResourceLocation biomeId, ResourceLocation blockId) {
         if (biomeId == null || blockId == null) {
             return 1.0;
         }
 
-        String biomeKey = biomeId.toString();
-        BiomeGrowthConfig config = biomeGrowth.get(biomeKey);
+        BiomeGrowthConfig config = getGrowthConfig(biomeId);
         if (config == null) {
             return 1.0;
         }
@@ -171,34 +254,22 @@ public class RegnumConfig {
     }
 
     public double getTreeMultiplier(ResourceLocation biomeId) {
-        if (biomeId == null) {
-            return 1.0;
-        }
-        BiomeWorldgenConfig config = biomeWorldgen.get(biomeId.toString());
+        BiomeWorldgenConfig config = getWorldgenConfig(biomeId);
         return config != null ? config.treeMultiplier : 1.0;
     }
 
     public double getFlowerMultiplier(ResourceLocation biomeId) {
-        if (biomeId == null) {
-            return 1.0;
-        }
-        BiomeWorldgenConfig config = biomeWorldgen.get(biomeId.toString());
+        BiomeWorldgenConfig config = getWorldgenConfig(biomeId);
         return config != null ? config.flowerMultiplier : 1.0;
     }
 
     public double getGrassMultiplier(ResourceLocation biomeId) {
-        if (biomeId == null) {
-            return 1.0;
-        }
-        BiomeWorldgenConfig config = biomeWorldgen.get(biomeId.toString());
+        BiomeWorldgenConfig config = getWorldgenConfig(biomeId);
         return config != null ? config.grassMultiplier : 1.0;
     }
 
     public double getVegetationMultiplier(ResourceLocation biomeId, String vegType, ResourceLocation blockId) {
-        if (biomeId == null) {
-            return 1.0;
-        }
-        BiomeWorldgenConfig config = biomeWorldgen.get(biomeId.toString());
+        BiomeWorldgenConfig config = getWorldgenConfig(biomeId);
         if (config == null) {
             return 1.0;
         }
@@ -218,8 +289,7 @@ public class RegnumConfig {
 
     public double getOreMultiplier(ResourceLocation biomeId, String oreCategory, ResourceLocation oreBlockId) {
         if (biomeId != null) {
-            String biomeKey = biomeId.toString();
-            BiomeWorldgenConfig config = biomeWorldgen.get(biomeKey);
+            BiomeWorldgenConfig config = getWorldgenConfig(biomeId);
             if (config != null) {
                 if (oreBlockId != null && config.oreMultipliers.containsKey(oreBlockId.toString())) {
                     return config.oreMultipliers.get(oreBlockId.toString());
@@ -252,11 +322,7 @@ public class RegnumConfig {
     }
 
     public double getMobSpawnMultiplier(ResourceLocation biomeId, MobCategory category, ResourceLocation mobId) {
-        if (biomeId == null) {
-            return 1.0;
-        }
-
-        BiomeMobConfig config = biomeMobs.get(biomeId.toString());
+        BiomeMobConfig config = getMobConfig(biomeId);
         if (config == null) {
             return 1.0;
         }
@@ -287,14 +353,14 @@ public class RegnumConfig {
         if (biomeId == null) {
             return 1.0;
         }
-        return biomeFishing.getOrDefault(biomeId.toString(), 1.0);
+        return biomeFishing.getOrDefault(resolveBiomeKey(biomeId), 1.0);
     }
 
     public double getAnimalGrowthMultiplier(ResourceLocation biomeId) {
         if (biomeId == null) {
             return 1.0;
         }
-        return biomeAnimalGrowth.getOrDefault(biomeId.toString(), 1.0);
+        return biomeAnimalGrowth.getOrDefault(resolveBiomeKey(biomeId), 1.0);
     }
 
     public static RegnumConfig createDefaultConfig() {

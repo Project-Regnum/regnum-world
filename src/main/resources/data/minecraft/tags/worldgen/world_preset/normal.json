@@ -1,0 +1,13 @@
+{
+  "replace": false,
+  "values": [
+    {
+      "id": "terra:overworld/overworld",
+      "required": false
+    },
+    {
+      "id": "terra:default/default",
+      "required": false
+    }
+  ]
+}
