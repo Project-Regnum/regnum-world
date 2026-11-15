@@ -72,18 +72,18 @@ public class RegnumCommand {
         }
 
         RegnumConfig config = RegnumConfig.getInstance();
-        BiomeGrowthConfig growthConfig = config.biomeGrowth.get(biomeId.toString());
-        BiomeWorldgenConfig worldgenConfig = config.biomeWorldgen.get(biomeId.toString());
-        BiomeMobConfig mobConfig = config.biomeMobs.get(biomeId.toString());
+        BiomeGrowthConfig growthConfig = config.getGrowthConfig(biomeId);
+        BiomeWorldgenConfig worldgenConfig = config.getWorldgenConfig(biomeId);
+        BiomeMobConfig mobConfig = config.getMobConfig(biomeId);
 
         source.sendSuccess(() -> Component.translatable("command.regnum.info.header")
                 .withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD), false);
 
-        // Biome name (uses vanilla translatable name + identifier)
-        String biomeTransKey = "biome." + biomeId.getNamespace() + "." + biomeId.getPath();
+        // Biome name (uses localized name + identifier)
+        Component biomeComponent = getLocalizedBiomeName(biomeId);
         source.sendSuccess(() -> Component.translatable("command.regnum.info.biome")
                 .withStyle(ChatFormatting.GRAY)
-                .append(Component.translatable(biomeTransKey).withStyle(ChatFormatting.AQUA))
+                .append(biomeComponent.copy().withStyle(ChatFormatting.AQUA))
                 .append(Component.literal(" (" + biomeId + ")").withStyle(ChatFormatting.DARK_GRAY)), false);
 
         // Check underground / mine status
@@ -187,5 +187,49 @@ public class RegnumCommand {
         if (multiplier > 1.0) return ChatFormatting.GREEN;
         if (multiplier < 1.0) return ChatFormatting.RED;
         return ChatFormatting.WHITE;
+    }
+
+    private static Component getLocalizedBiomeName(ResourceLocation biomeId) {
+        if (biomeId == null) {
+            return Component.literal("Unknown");
+        }
+        String namespace = biomeId.getNamespace();
+        String path = biomeId.getPath();
+
+        // 1. direct key: e.g. "biome.terra:overworld/overworld/tundra_hills"
+        String directKey = "biome." + namespace + ":" + path;
+        // 2. dot key: e.g. "biome.terra.overworld.overworld.tundra_hills"
+        String dotKey = "biome." + namespace + "." + path.replace('/', '.');
+        // 3. simple key: e.g. "biome.terra.tundra_hills"
+        int lastSlash = path.lastIndexOf('/');
+        String simpleName = (lastSlash >= 0 && lastSlash < path.length() - 1) ? path.substring(lastSlash + 1) : path;
+        String simpleKey = "biome." + namespace + "." + simpleName;
+
+        net.minecraft.locale.Language lang = net.minecraft.locale.Language.getInstance();
+        if (lang.has(directKey)) {
+            return Component.translatable(directKey);
+        }
+        if (lang.has(dotKey)) {
+            return Component.translatable(dotKey);
+        }
+        if (lang.has(simpleKey)) {
+            return Component.translatable(simpleKey);
+        }
+
+        String fallback = humanizeName(simpleName);
+        return Component.translatableWithFallback(dotKey, fallback);
+    }
+
+    private static String humanizeName(String name) {
+        if (name == null || name.isEmpty()) return "";
+        String[] parts = name.split("_");
+        StringBuilder sb = new StringBuilder();
+        for (String part : parts) {
+            if (!part.isEmpty()) {
+                if (sb.length() > 0) sb.append(' ');
+                sb.append(Character.toUpperCase(part.charAt(0))).append(part.substring(1).toLowerCase());
+            }
+        }
+        return sb.toString();
     }
 }
