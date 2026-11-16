@@ -18,6 +18,8 @@ public class RegnumWorld implements ModInitializer {
 
         // Load or create configuration
         RegnumConfig.load();
+        zooller.regnumworld.dungeon.DungeonItems.initialize();
+        zooller.regnumworld.dungeon.Dungeons.initialize();
 
         // Register commands
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {

@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {
+      "item": "regnum-world:ancient_bone_fragments"
+    },
+    {
+      "item": "regnum-world:ancient_bone_fragments"
+    },
+    {
+      "item": "regnum-world:ancient_bone_fragments"
+    }
+  ],
+  "result": {
+    "id": "minecraft:experience_bottle",
+    "count": 4
+  }
+}

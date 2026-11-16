@@ -20,7 +20,12 @@
 		"RegistryDataLoaderMixin",
 		"CropBlockInvoker",
 		"BambooStalkBlockInvoker",
-		"StemBlockAccessor"
+		"StemBlockAccessor",
+		"DungeonLevelMixin",
+		"DungeonPlayerMixin",
+		"DungeonExplosionMixin",
+		"DungeonPistonMixin",
+		"DungeonAdminEditMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

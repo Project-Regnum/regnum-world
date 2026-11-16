@@ -137,3 +137,11 @@ cd regnum-world
 
 The compiled mod JAR will be located at:
 `build/libs/regnum-world-1.0.0.jar`
+
+## Static dungeons (operators)
+
+`/regnum dungeon generate <mine|catacombs|bastion>` searches nearby; append `here` for the current chunk origin, or `force` to bypass terrain/spacing preferences. Explicit `<x> <z> [force]`, `preview` and `validate` remain available. Force and preview use clickable **CONFIRM / CANCEL** buttons or `/regnum dungeon confirm` and `/regnum dungeon cancel`, bound to the operator and target for 60 seconds. Claims, overlap, recognizable construction and intersecting structures remain protected. Ordinary stone/dirt blocks have no player-origin metadata, so inspect force previews before confirming.
+
+`list` shows short IDs with autocomplete for `info <id>`, `tp <id>`, `reset <id>`, `recover <id>` and `remove <id>`. Removal keeps physical blocks because no original snapshot exists; it removes territory/Atlas state and encounter ownership, and preserves earned pending rewards until delivered. Creative operators can edit dungeon blocks directly. Existing layouts are retained until explicitly recovered; new dungeons use the themed v2 geometry.
+
+Clear encounter rooms and the central elite to awaken the boss. Cleared rooms stay cleared until the dungeon cycle resets; inactive owned mobs are cleaned up. Natural hostiles are suppressed only inside registered regions. Seven registered dungeon materials/trophies have original icons, tier loot tables, crafting exchanges and tooltip recipes, without requiring Professions. Config includes encounter cap, inactive cleanup, room unlock count and bounded placement settings. Default searches inspect at most 16 candidates and 96 explicit chunk requests, one per tick; vanilla generation can request neighbors internally.

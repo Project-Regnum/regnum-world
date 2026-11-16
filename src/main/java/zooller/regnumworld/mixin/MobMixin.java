@@ -16,6 +16,8 @@ import zooller.regnumworld.mob.MobSpawnHelper;
 public class MobMixin {
     @Inject(method = "checkSpawnRules", at = @At("RETURN"), cancellable = true)
     private void regnumworld$onCheckSpawnRules(LevelAccessor level, MobSpawnType spawnType, CallbackInfoReturnable<Boolean> cir) {
+        if(level instanceof net.minecraft.server.level.ServerLevel server && ((Object)this) instanceof net.minecraft.world.entity.monster.Enemy && zooller.regnumworld.dungeon.Dungeons.suppressNatural(server,((Mob)(Object)this).blockPosition())
+                && (spawnType==MobSpawnType.NATURAL||spawnType==MobSpawnType.CHUNK_GENERATION||spawnType==MobSpawnType.REINFORCEMENT||spawnType==MobSpawnType.PATROL)) {cir.setReturnValue(false);return;}
         if (!cir.getReturnValueZ()) {
             return;
         }

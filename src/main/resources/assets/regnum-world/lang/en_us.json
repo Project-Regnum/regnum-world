@@ -20,7 +20,6 @@
   "command.regnum.info.mob_spawns.animals": "Animals: %s",
   "command.regnum.info.fishing": "Fishing Speed: ",
   "command.regnum.info.animal_growth": "Animal Growth: ",
-
   "ore.regnum.coal": "Coal",
   "ore.regnum.iron": "Iron",
   "ore.regnum.copper": "Copper",
@@ -29,11 +28,9 @@
   "ore.regnum.diamond": "Diamond",
   "ore.regnum.lapis": "Lapis",
   "ore.regnum.emerald": "Emerald",
-
   "generator.terra": "Terra",
   "generator.terra.overworld.overworld": "Terra: Overworld",
   "generator.terra.default.default": "Terra: Default",
-
   "biome.terra.tundra_hills": "Tundra Hills",
   "biome.terra.overworld.overworld.tundra_hills": "Tundra Hills",
   "biome.terra.tundra": "Tundra",
@@ -133,5 +130,19 @@
   "biome.terra.dripstone_caves": "Dripstone Caves",
   "biome.terra.overworld.overworld.dripstone_caves": "Dripstone Caves",
   "biome.terra.deep_dark": "Deep Dark",
-  "biome.terra.overworld.overworld.deep_dark": "Deep Dark"
+  "biome.terra.overworld.overworld.deep_dark": "Deep Dark",
+  "item.regnum-world.forgotten_iron": "Forgotten Iron",
+  "item.regnum-world.ancient_bone_fragments": "Ancient Bone Fragments",
+  "item.regnum-world.ruined_sigil": "Ruined Sigil",
+  "item.regnum-world.corrupted_crystal": "Corrupted Crystal",
+  "item.regnum-world.foreman_trophy": "Foreman’s Trophy",
+  "item.regnum-world.warden_trophy": "Crypt Warden’s Trophy",
+  "item.regnum-world.castellan_trophy": "Castellan’s Trophy",
+  "item.regnum-world.forgotten_iron.hint": "Craft 2 into 6 iron ingots; combine 4 with a Foreman trophy for a diamond pickaxe.",
+  "item.regnum-world.ancient_bone_fragments.hint": "Craft 3 into 4 experience bottles; combine 4 with a Warden trophy for a totem.",
+  "item.regnum-world.ruined_sigil.hint": "Combine 4 with a diamond for netherite scrap; 4 with a Castellan trophy for an upgrade template.",
+  "item.regnum-world.corrupted_crystal.hint": "Combine 4 with a golden apple for an enchanted golden apple.",
+  "item.regnum-world.foreman_trophy.hint": "Combine with 4 Forgotten Iron for a diamond pickaxe.",
+  "item.regnum-world.warden_trophy.hint": "Combine with 4 Ancient Bone Fragments for a totem of undying.",
+  "item.regnum-world.castellan_trophy.hint": "Combine with 4 Ruined Sigils for a netherite upgrade template."
 }

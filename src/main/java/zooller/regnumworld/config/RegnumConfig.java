@@ -19,7 +19,8 @@ import java.util.Map;
 
 public class RegnumConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static RegnumConfig INSTANCE;
+    // Publish fully validated config snapshots to parallel generation workers.
+    private static volatile RegnumConfig INSTANCE;
 
     /**
      * Bone meal efficiency (0.5 = 50% chance of success, nerfed by half).

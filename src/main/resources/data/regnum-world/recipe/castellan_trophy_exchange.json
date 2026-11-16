@@ -1,0 +1,25 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {
+      "item": "regnum-world:castellan_trophy"
+    },
+    {
+      "item": "regnum-world:ruined_sigil"
+    },
+    {
+      "item": "regnum-world:ruined_sigil"
+    },
+    {
+      "item": "regnum-world:ruined_sigil"
+    },
+    {
+      "item": "regnum-world:ruined_sigil"
+    }
+  ],
+  "result": {
+    "id": "minecraft:netherite_upgrade_smithing_template",
+    "count": 1
+  }
+}

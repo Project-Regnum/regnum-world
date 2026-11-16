@@ -13,7 +13,7 @@ import zooller.regnumworld.worldgen.WorldgenHelper;
 
 @Mixin(PlacedFeature.class)
 public class PlacedFeatureMixin {
-    @Inject(method = "place", at = @At("HEAD"), cancellable = true)
+    @Inject(method = {"place", "placeWithBiomeCheck"}, at = @At("HEAD"), cancellable = true)
     private void regnumworld$onPlace(
             WorldGenLevel level,
             ChunkGenerator generator,

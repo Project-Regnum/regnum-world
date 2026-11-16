@@ -1,6 +1,8 @@
 package zooller.regnumworld.worldgen;
 
 import net.minecraft.core.Holder;
+import net.minecraft.core.BlockPos;
+import net.minecraft.util.RandomSource;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.BlockTags;
@@ -39,6 +41,13 @@ public final class WorldgenTypeResolver {
     private WorldgenTypeResolver() {}
 
     public static ClassificationResult classify(PlacedFeature placedFeature) {
+        return classify(placedFeature, null);
+    }
+
+    public static ClassificationResult classify(PlacedFeature placedFeature, BlockPos pos) {
+        if (placedFeature == null) {
+            return new ClassificationResult(FeatureCategory.OTHER, null, null);
+        }
         Holder<ConfiguredFeature<?, ?>> featureHolder = placedFeature.feature();
         if (featureHolder == null || !featureHolder.isBound()) {
             return new ClassificationResult(FeatureCategory.OTHER, null, null);
@@ -97,9 +106,16 @@ public final class WorldgenTypeResolver {
         if (config instanceof RandomPatchConfiguration patchConfig) {
             Holder<PlacedFeature> innerPlaced = patchConfig.feature();
             if (innerPlaced != null && innerPlaced.isBound()) {
-                ConfiguredFeature<?, ?> innerConfigured = innerPlaced.value().feature().value();
-                if (innerConfigured.config() instanceof SimpleBlockConfiguration simpleBlock) {
-                    BlockState placedState = simpleBlock.toPlace().getState(null, null);
+                Holder<ConfiguredFeature<?, ?>> innerHolder = innerPlaced.value().feature();
+                if (innerHolder != null && innerHolder.isBound() && pos != null &&
+                        innerHolder.value().config() instanceof SimpleBlockConfiguration simpleBlock &&
+                        simpleBlock.toPlace() != null) {
+                    // Providers can depend on position (noise) AND random (weighted states).
+                    // Never consume the placement RNG or share a mutable RNG across chunk workers.
+                    BlockState placedState = simpleBlock.toPlace().getState(RandomSource.create(pos.asLong()), pos);
+                    if (placedState == null) {
+                        return new ClassificationResult(FeatureCategory.OTHER, null, null);
+                    }
                     Block placedBlock = placedState.getBlock();
                     ResourceLocation blockKey = BuiltInRegistries.BLOCK.getKey(placedBlock);
 

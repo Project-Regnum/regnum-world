@@ -1,0 +1,25 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {
+      "item": "regnum-world:warden_trophy"
+    },
+    {
+      "item": "regnum-world:ancient_bone_fragments"
+    },
+    {
+      "item": "regnum-world:ancient_bone_fragments"
+    },
+    {
+      "item": "regnum-world:ancient_bone_fragments"
+    },
+    {
+      "item": "regnum-world:ancient_bone_fragments"
+    }
+  ],
+  "result": {
+    "id": "minecraft:totem_of_undying",
+    "count": 1
+  }
+}

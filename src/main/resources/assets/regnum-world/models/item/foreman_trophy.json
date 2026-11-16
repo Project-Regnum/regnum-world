@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "regnum-world:item/foreman_trophy"
+  }
+}

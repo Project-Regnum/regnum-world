@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {
+      "item": "regnum-world:forgotten_iron"
+    },
+    {
+      "item": "regnum-world:forgotten_iron"
+    }
+  ],
+  "result": {
+    "id": "minecraft:iron_ingot",
+    "count": 6
+  }
+}
