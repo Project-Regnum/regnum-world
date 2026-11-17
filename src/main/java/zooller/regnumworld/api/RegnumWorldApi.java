@@ -15,6 +15,36 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 public final class RegnumWorldApi {
+    public static final int GROWTH_API_VERSION = 1;
+    private static final ThreadLocal<Boolean> REPLAY = ThreadLocal.withInitial(()->false);
+    private static final ThreadLocal<Boolean> DELEGATING = ThreadLocal.withInitial(()->false);
+
+    /** Pure policy query; never invokes controllers or mutates crops. No authoritative season system exists. */
+    public record CropGrowthPolicy(int version, boolean blocked, double multiplier) {}
+    public static CropGrowthPolicy evaluateCropGrowth(ServerLevel level, BlockPos pos, BlockState state) {
+        boolean blocked=isUndergroundGrowthBlocked(level,pos);
+        return new CropGrowthPolicy(GROWTH_API_VERSION,blocked,blocked?0:getFinalCropMultiplier(level,pos,state));
+    }
+    /** Controller-owned vanilla replay: World rules are already accounted for. Always restored on exception. */
+    public static void replayCropTick(Runnable tick) {
+        if(!DELEGATING.get())throw new IllegalStateException("Replay requires an active growth controller callback");
+        boolean previous=REPLAY.get();REPLAY.set(true);
+        try{tick.run();}finally{REPLAY.set(previous);}
+    }
+    public static boolean isReplayingCropTick(){return REPLAY.get();}
+    /** First HANDLED/CANCEL wins. Nested unmarked dispatch is cancelled to prevent recursion. */
+    public static GrowthResult delegateCropTick(BlockState state, ServerLevel level, BlockPos pos,
+            net.minecraft.util.RandomSource random, double multiplier) {
+        if(DELEGATING.get())return GrowthResult.CANCEL;
+        DELEGATING.set(true);
+        try {
+            for(var controller:CONTROLLERS){
+                GrowthResult result=java.util.Objects.requireNonNull(controller.onRandomTick(state,level,pos,random,multiplier));
+                if(result!=GrowthResult.PASS)return result;
+            }
+            return GrowthResult.PASS;
+        }finally{DELEGATING.set(false);}
+    }
     private static final List<ExternalGrowthController> CONTROLLERS = new CopyOnWriteArrayList<>();
 
     private RegnumWorldApi() {}
@@ -36,10 +66,10 @@ public final class RegnumWorldApi {
     }
 
     /**
-     * Returns the list of registered controllers.
+     * Returns an immutable snapshot of registered controllers.
      */
     public static List<ExternalGrowthController> getControllers() {
-        return CONTROLLERS;
+        return List.copyOf(CONTROLLERS);
     }
 
     /**

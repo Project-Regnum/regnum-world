@@ -8,7 +8,11 @@ import net.minecraft.world.level.block.state.BlockState;
 @FunctionalInterface
 public interface ExternalGrowthController {
     /**
-     * Invoked when a plant receives a random tick.
+     * Invoked on the server thread after World's underground restriction check.
+     * Apply regionalMultiplier once. Return PASS only without mutating growth.
+     * For original vanilla ticks use RegnumWorldApi.replayCropTick inside this
+     * synchronous callback, then return HANDLED; never intercept GrowthHelper.
+     * The first non-PASS result wins in registration order. No seasons are supplied.
      *
      * @param state Current block state
      * @param level Server level

@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "regnum-world-test",
+  "version": "1.0.0",
+  "environment": "server",
+  "entrypoints": {"fabric-gametest": ["zooller.regnumworld.dungeon.DungeonServerTests"]},
+  "depends": {"regnum-world": "*", "fabric-gametest-api-v1": "*"}
+}

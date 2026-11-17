@@ -94,3 +94,30 @@ publishing {
 		// retrieving dependencies.
 	}
 }
+
+// Dedicated server tests always use disposable build output, never the normal run/world.
+fabricApi {
+    configureTests {
+        createSourceSet = true
+        modId = 'regnum-world-test'
+        enableClientGameTests = false
+    }
+}
+if (providers.gradleProperty('integrationMods').isPresent()) {
+    dependencies {
+        modRuntimeOnly files(providers.gradleProperty('integrationMods').get().split(',').collect { file(it) })
+    }
+}
+tasks.register('resetGameTestWorld', Delete) { delete layout.buildDirectory.dir('run/gameTest/world') }
+tasks.named('runGameTest', JavaExec) {
+    dependsOn tasks.named('resetGameTestWorld')
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+}
+// Supply the ORIGINAL Nations artifact to Economy's normal development verifier.
+// This never skips its packaged version/content fingerprint lock.
+if (providers.gradleProperty('integrationNationsJar').isPresent()) {
+    def originalNationsJar = file(providers.gradleProperty('integrationNationsJar').get()).absolutePath
+    loom.runs.configureEach {
+        vmArg "-DregnumEconomy.nationsSourceJar=${originalNationsJar}"
+    }
+}
