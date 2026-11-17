@@ -156,7 +156,7 @@ final class DungeonPlacement {
         }
         int front=Integer.MIN_VALUE;int back=Integer.MIN_VALUE;
         for(int w=22;w<=26;w++){front=Math.max(front,heights[w*48]);back=Math.max(back,heights[w*48+47]);}
-        int[] sorted=heights.clone();Arrays.sort(sorted);int surfaceY=Math.max(sorted[sorted.length/2],Math.max(front,back));
+        int[] sorted=heights.clone();Arrays.sort(sorted);int surfaceY=Math.min(sorted[sorted.length/2],Math.min(front,back));
         int y=surfaceY-(type.equals("mine")?10:type.equals("catacombs")?12:0);
         int bottom=y-2;
         // Inspect only foundations that will be touched, rather than rejecting structures far below solid ground.
@@ -213,17 +213,17 @@ final class DungeonPlacement {
     private static boolean natural(BlockState state) {
         String id=BuiltInRegistries.BLOCK.getKey(state.getBlock()).getPath();
         return state.is(BlockTags.DIRT)||state.is(BlockTags.BASE_STONE_OVERWORLD)||state.is(BlockTags.BASE_STONE_NETHER)||state.is(BlockTags.SAND)
-            ||Set.of("gravel","clay","snow_block","ice","packed_ice","blue_ice","bedrock","calcite","tuff","dripstone_block","end_stone","obsidian","magma_block","netherrack","soul_sand","soul_soil").contains(id)||id.endsWith("_ore");
+            ||Set.of("moss_block","rooted_dirt","mud","muddy_mangrove_roots","pointed_dripstone","gravel","clay","snow_block","ice","packed_ice","blue_ice","bedrock","calcite","tuff","dripstone_block","end_stone","obsidian","magma_block","netherrack","soul_sand","soul_soil").contains(id)||id.endsWith("_ore");
     }
     static boolean safeToReplace(BlockState state) {
-        if(state.hasBlockEntity()||state.getBlock() instanceof CropBlock||state.getBlock() instanceof LeavesBlock&&state.getValue(LeavesBlock.PERSISTENT))return false;
+        if(state.is(Blocks.FARMLAND)||state.is(Blocks.DIRT_PATH)||state.hasBlockEntity()||state.getBlock() instanceof CropBlock||state.getBlock() instanceof LeavesBlock&&state.getValue(LeavesBlock.PERSISTENT))return false;
         return state.isAir()||natural(state)||state.is(BlockTags.LOGS)||state.is(BlockTags.LEAVES)||state.getBlock() instanceof BushBlock
-            ||state.is(Blocks.SNOW)||state.is(Blocks.WATER)||state.is(Blocks.LAVA)||state.is(Blocks.DIRT_PATH)||state.is(Blocks.FARMLAND)||state.is(Blocks.MOSS_CARPET)||state.is(Blocks.VINE)||state.is(Blocks.GLOW_LICHEN);
+            ||state.is(Blocks.SNOW)||state.is(Blocks.WATER)||state.is(Blocks.LAVA)||state.is(Blocks.MOSS_CARPET)||state.is(Blocks.VINE)||state.is(Blocks.GLOW_LICHEN);
     }
     private static void place(ServerLevel world,Plan plan) {
         // The caller rechecked claims/overlap in this same server tick, with the selected force policy.
         var d=new DungeonData.Dungeon(plan.type(),world.dimension().location().toString(),plan.x(),plan.y(),plan.z());
-        d.layoutVersion=2;d.frontY=plan.front();d.backY=plan.back();d.minimumY=Math.min(d.y-8,plan.bottom());
+        d.layoutVersion=3;d.frontY=plan.front();d.backY=plan.back();d.minimumY=Math.min(d.y-8,plan.bottom());d.maximumY=Math.max(d.y+16,plan.top());
         DungeonData.get(world.getServer()).register(d);
         Dungeons.building=true;
         try {

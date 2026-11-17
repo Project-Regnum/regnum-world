@@ -19,6 +19,7 @@ final class DungeonStructures {
     static Map<BlockPos,BlockState> blueprint(Dungeon d) {
         Map<BlockPos,BlockState> blocks=new LinkedHashMap<>();BiConsumer<BlockPos,BlockState> sink=blocks::put;
         if(theme(d)==3)bastion(sink,d);else underground(sink,d);
+        if(d.layoutVersion>=3)details(sink,d);
         return blocks;
     }
     private static void put(BiConsumer<BlockPos,BlockState> w,Dungeon d,int x,int y,int z,Block block){if(x>=0&&x<48&&z>=0&&z<48)w.accept(new BlockPos(d.x+x,y,d.z+z),block instanceof LanternBlock?block.defaultBlockState().setValue(LanternBlock.HANGING,true):block.defaultBlockState());}
@@ -87,13 +88,73 @@ final class DungeonStructures {
             if(step%4==0)for(int dx:new int[]{-3,3})fill(w,d,24+dx,floor-1,z,24+dx,floor+4,z,theme(d)==1?Blocks.OAK_LOG:Blocks.DEEPSLATE_BRICKS);
         }
         // When a forced mountain site exceeds the stair run, a side ladder covers every vertical gap.
-        if(depth>run){fill(w,d,22,d.y,0,26,d.y+3,8,Blocks.AIR);fill(w,d,22,d.y-1,0,26,d.y-1,8,Blocks.STONE_BRICKS);}
+        if(depth>run){int from=front?0:39,to=front?8:47;fill(w,d,22,d.y,from,26,d.y+3,to,Blocks.AIR);fill(w,d,22,d.y-1,from,26,d.y-1,to,Blocks.STONE_BRICKS);}
         if(depth>run)for(int y=d.y;y<=surface+1;y++) {
             int z=front?0:47;put(w,d,21,y,z,Blocks.STONE_BRICKS);
             w.accept(new BlockPos(d.x+22,y,d.z+z),Blocks.LADDER.defaultBlockState().setValue(LadderBlock.FACING,Direction.EAST));
         }
         int z=front?1:46;fill(w,d,21,surface+4,z,27,surface+4,z,theme(d)==1?Blocks.OAK_LOG:Blocks.CHISELED_STONE_BRICKS);
         if(theme(d)==1){put(w,d,20,surface,z,Blocks.GRAVEL);put(w,d,28,surface,z,Blocks.MOSSY_COBBLESTONE);}
+    }
+    private static void details(BiConsumer<BlockPos,BlockState> w,Dungeon d) {
+        if(theme(d)<3) {
+            // Repeated structural modules make corridors readable, with cover outside the walking lanes.
+            for(int row=0;row<3;row++)for(int x:new int[]{15,31}) {
+                int z=8+row*16;
+                for(int side:new int[]{-3,3})fill(w,d,x,d.y,z+side,x,d.y+3,z+side,theme(d)==1?Blocks.OAK_LOG:Blocks.CHISELED_STONE_BRICKS);
+                for(int side=-3;side<=3;side++)put(w,d,x,d.y+4,z+side,theme(d)==1?Blocks.OAK_LOG:Blocks.STONE_BRICKS);
+                put(w,d,x,d.y+3,z,theme(d)==1?Blocks.LANTERN:Blocks.SOUL_LANTERN);
+            }
+            for(int col=0;col<3;col++)for(int z:new int[]{15,31}) {
+                int x=8+col*16;
+                for(int side:new int[]{-3,3})fill(w,d,x+side,d.y,z,x+side,d.y+3,z,theme(d)==1?Blocks.OAK_LOG:Blocks.CHISELED_STONE_BRICKS);
+                fill(w,d,x-3,d.y+4,z,x+3,d.y+4,z,theme(d)==1?Blocks.OAK_LOG:Blocks.STONE_BRICKS);
+            }
+            if(theme(d)==1) {
+                // A resource face and an abandoned haulage siding off the western branch.
+                tunnel(w,d,8,8,3,15,1);
+                for(int z=12;z<=17;z++) {
+                    put(w,d,1,d.y,z,z%2==0?Blocks.DEEPSLATE_IRON_ORE:Blocks.COAL_ORE);
+                    w.accept(new BlockPos(d.x+3,d.y,d.z+z),Blocks.RAIL.defaultBlockState());
+                }
+                for(int x:new int[]{4,12})for(int z:new int[]{4,36})put(w,d,x,d.y,z,Blocks.OAK_PLANKS);
+            } else {
+                // Sunken reliquary: two broad steps lead into a lower crypt rather than a flat box.
+                fill(w,d,29,d.y-3,29,33,d.y-3,33,Blocks.CHISELED_STONE_BRICKS);
+                fill(w,d,29,d.y-2,29,33,d.y+2,33,Blocks.AIR);
+                fill(w,d,28,d.y-1,29,28,d.y-1,33,Blocks.STONE_BRICKS);
+                fill(w,d,29,d.y-2,29,29,d.y-2,33,Blocks.STONE_BRICKS);
+                fill(w,d,33,d.y-2,29,33,d.y-2,33,Blocks.STONE_BRICKS);
+                fill(w,d,34,d.y-1,29,34,d.y-1,33,Blocks.STONE_BRICKS);
+                put(w,d,31,d.y-2,31,Blocks.CHISELED_DEEPSLATE);
+                for(int x:new int[]{3,13,35,45})for(int z:new int[]{4,36}) {
+                    put(w,d,x,d.y,z,Blocks.STONE_BRICK_SLAB);
+                    put(w,d,x,d.y+1,z,Blocks.SKELETON_SKULL);
+                }
+                // Boss room niches offer cover against ranged pursuers without blocking the center.
+                for(int x:new int[]{35,45})fill(w,d,x,d.y,36,x,d.y+3,37,Blocks.POLISHED_BASALT);
+            }
+        } else {
+            // Two wall walks connect all four towers. Side ladders create alternate PvP approaches.
+            for(int z:new int[]{5,42}) {
+                fill(w,d,5,d.y+5,z-1,42,d.y+5,z+1,Blocks.STONE_BRICKS);
+                for(int x=5;x<=42;x++)if(x%4!=0)put(w,d,x,d.y+6,z==5?z-2:z+2,Blocks.STONE_BRICK_WALL);
+            }
+            for(int x:new int[]{5,42})for(int z:new int[]{8,39}) {
+                fill(w,d,x-1,d.y,z,x-1,d.y+6,z,Blocks.STONE_BRICKS);
+                for(int y=d.y;y<=d.y+6;y++)w.accept(new BlockPos(d.x+x,y,d.z+z),Blocks.LADDER.defaultBlockState().setValue(LadderBlock.FACING,Direction.EAST));
+                fill(w,d,x,d.y+5,z-2,x+1,d.y+5,z+2,Blocks.STONE_BRICKS);
+                w.accept(new BlockPos(d.x+x,d.y+5,d.z+z),Blocks.LADDER.defaultBlockState().setValue(LadderBlock.FACING,Direction.EAST));
+            }
+            // Ruined gallery with windows, high roof and doors at both ends; central courtyard has low cover.
+            for(int z=11;z<=22;z++)for(int x:new int[]{34,45})for(int h=3;h<=6;h++)
+                if(h==3||h==6||z%4==0)put(w,d,x,d.y+h,z,Blocks.CRACKED_STONE_BRICKS);
+            fill(w,d,34,d.y+7,11,45,d.y+7,22,Blocks.STONE_BRICK_SLAB);
+            for(int x:new int[]{17,30})for(int z:new int[]{19,29}) {
+                fill(w,d,x,d.y,z,x+1,d.y+1,z+1,Blocks.MOSSY_COBBLESTONE);
+                put(w,d,x,d.y+2,z,Blocks.COBBLESTONE_WALL);
+            }
+        }
     }
     private static void bastion(BiConsumer<BlockPos,BlockState> w,Dungeon d) {
         // Open courtyards with broken perimeter walls, four towers and elevated east-side halls.

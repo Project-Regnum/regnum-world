@@ -34,4 +34,23 @@ class DungeonPersistenceTest {
         var loaded=DungeonData.load(original.save(new CompoundTag(),null),null);
         assertTrue(loaded.entries.isEmpty());assertNull(loaded.find("minecraft:overworld",0,0));assertEquals(reward,loaded.retired.getFirst().pending.getFirst());
     }
+    @Test void rejectedRegistrationDoesNotPublishPartialState() {
+        DungeonData data=new DungeonData();
+        var first=new DungeonData.Dungeon("mine","minecraft:overworld",32,70,0);data.register(first);
+        var overlapping=new DungeonData.Dungeon("bastion","minecraft:overworld",0,70,0);
+        assertThrows(IllegalStateException.class,()->data.register(overlapping));
+        assertEquals(1,data.entries.size());assertNull(data.find("minecraft:overworld",0,0));
+        assertSame(first,data.find("minecraft:overworld",2,0));
+    }
+    @Test void forcedMountainEntrancesRemainProtectedAfterRestart() {
+        DungeonData data=new DungeonData();
+        var d=new DungeonData.Dungeon("mine","minecraft:overworld",0,70,0);d.frontY=100;d.maximumY=114;data.register(d);
+        var restored=DungeonData.load(data.save(new CompoundTag(),null),null).entries.get(d.id);
+        assertTrue(restored.contains(d.dimension,24,104,0));assertTrue(restored.contains(d.dimension,24,114,0));
+        assertFalse(restored.contains(d.dimension,24,115,0));
+        var legacy=d.save();legacy.remove("MaximumY");
+        var wrapper=new CompoundTag();var list=new net.minecraft.nbt.ListTag();list.add(legacy);wrapper.put("Dungeons",list);
+        assertTrue(DungeonData.load(wrapper,null).entries.get(d.id).contains(d.dimension,24,104,0));
+    }
+
 }

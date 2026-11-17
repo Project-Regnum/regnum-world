@@ -21,4 +21,14 @@ class DungeonPlacementTest {
         assertTrue(DungeonPlacement.overlaps(-48,-48,-1,-1));
         assertFalse(DungeonPlacement.overlaps(-48,-48,0,0));
     }
+    @Test void forceReplacementWhitelistRejectsCultivationAndPlayerFixtures() {
+        net.minecraft.SharedConstants.tryDetectVersion();net.minecraft.server.Bootstrap.bootStrap();
+        for(var block:java.util.List.of(net.minecraft.world.level.block.Blocks.FARMLAND,net.minecraft.world.level.block.Blocks.DIRT_PATH,
+                net.minecraft.world.level.block.Blocks.CHEST,net.minecraft.world.level.block.Blocks.RAIL,net.minecraft.world.level.block.Blocks.OAK_PLANKS))
+            assertFalse(DungeonPlacement.safeToReplace(block.defaultBlockState()),block.toString());
+        assertFalse(DungeonPlacement.safeToReplace(net.minecraft.world.level.block.Blocks.OAK_LEAVES.defaultBlockState()
+                .setValue(net.minecraft.world.level.block.LeavesBlock.PERSISTENT,true)));
+        assertTrue(DungeonPlacement.safeToReplace(net.minecraft.world.level.block.Blocks.AIR.defaultBlockState()));
+    }
+
 }

@@ -33,7 +33,8 @@ public final class Dungeons {
     public static DungeonConfig config;
     public static boolean building;
     public static final ThreadLocal<Boolean> adminWriting=ThreadLocal.withInitial(()->false);
-    private static final Map<UUID,Long> bossWindup=new HashMap<>();
+    private record Telegraph(long due, net.minecraft.world.phys.Vec3 origin, boolean casting) {}
+    private static final Map<UUID,Telegraph> bossWindup=new HashMap<>();
     public static boolean admin(net.minecraft.world.entity.player.Player p){return p!=null&&p.isCreative()&&p.hasPermissions(2);}
     public static int clearedRooms(Dungeon d){int n=0;for(int i=0;i<8;i++)if(d.cleared[i])n++;return n;}
     public static boolean suppressNatural(Level level,BlockPos pos){return at(level,pos)!=null;}
@@ -59,6 +60,19 @@ public final class Dungeons {
             DungeonPlacement.automatic(world,new BlockPos(gx*16,0,gz*16),DungeonTypes.ids().get(Math.floorMod(hash,DungeonTypes.ids().size())));
         });
         ServerEntityEvents.ENTITY_LOAD.register((entity,world)->{
+            // Persist projectile ownership too, so arrows in unloaded chunks expire with their encounter cycle.
+            if(entity instanceof net.minecraft.world.entity.projectile.Projectile shot&&shot.getOwner()!=null)
+                for(String tag:shot.getOwner().getTags())if(tag.startsWith("regnum_encounter:")) {
+                    String[] parts=tag.split(":");if(parts.length==4)entity.addTag("regnum_projectile:"+parts[1]+":"+parts[3]);
+                }
+            for(String tag:entity.getTags())if(tag.startsWith("regnum_projectile:")) {
+                try {
+                    String[] parts=tag.split(":");
+                    if(parts.length!=3){entity.discard();return;}
+                    Dungeon owner=DungeonData.get(world.getServer()).entries.get(UUID.fromString(parts[1]));
+                    if(owner==null||owner.cycle!=Long.parseLong(parts[2])||owner.bossDefeated||!owner.dimension.equals(world.dimension().location().toString())){entity.discard();return;}
+                }catch(IllegalArgumentException malformed){entity.discard();return;}
+            }
             if(config.protection&&at(world,entity.blockPosition())!=null&&(entity instanceof net.minecraft.world.entity.vehicle.Boat||entity instanceof net.minecraft.world.entity.vehicle.AbstractMinecart||entity.getType()==EntityType.ARMOR_STAND||entity.getType()==EntityType.END_CRYSTAL)) {entity.discard();return;}
 
             boolean owned=false;
@@ -67,7 +81,7 @@ public final class Dungeons {
                 try {
                     String[] parts=tag.split(":");if(parts.length!=4){entity.discard();return;}
                     Dungeon d=DungeonData.get(world.getServer()).entries.get(UUID.fromString(parts[1]));int room=Integer.parseInt(parts[2]);long cycle=Long.parseLong(parts[3]);
-                    if(d==null||room<0||room>8||cycle!=d.cycle||d.cleared[room]||d.bossDefeated){entity.discard();return;}
+                    if(d==null||!d.dimension.equals(world.dimension().location().toString())||room<0||room>8||cycle!=d.cycle||d.cleared[room]||d.bossDefeated){entity.discard();return;}
                     int cap=room==8?1:config.spawnCount+d.tier()+1;
                     long count=d.mobs.entrySet().stream().filter(e->e.getValue()==room&&!e.getKey().equals(entity.getUUID())).count();
                     if(count>=cap||d.mobs.size()>=config.maxMobsPerDungeon&&!d.mobs.containsKey(entity.getUUID())){entity.discard();return;}
@@ -88,7 +102,7 @@ public final class Dungeons {
                 else if(!d.mobs.containsValue(room)) {
                     d.cleared[room]=true;d.started[room]=false;
                     if(source.getEntity() instanceof ServerPlayer recipient&&at(world,recipient.blockPosition())==d){
-                        CompoundTag reward=new CompoundTag();reward.putUUID("Player",recipient.getUUID());reward.putLong("Cycle",d.cycle);reward.putInt("Power",d.level);reward.putInt("Room",room);d.pending.add(reward);
+                        CompoundTag reward=new CompoundTag();reward.putUUID("Player",recipient.getUUID());reward.putLong("Cycle",d.cycle);reward.putInt("Power",d.level);reward.putInt("Room",room);DungeonRewardRules.prepare(reward,d,config);d.pending.add(reward);
                         data.setDirty();world.getServer().overworld().getDataStorage().save();
                     }
                     for(ServerPlayer player:world.players())if(at(world,player.blockPosition())==d)player.displayClientMessage(Component.literal("Encounter "+(room+1)+" cleared · "+clearedRooms(d)+"/8 · "+(d.cleared[4]&&clearedRooms(d)>=config.roomsToUnlockBoss?"Boss unlocked":"Defeat the elite and clear "+config.roomsToUnlockBoss+" rooms to unlock the boss")).withStyle(ChatFormatting.GOLD),false);
@@ -147,7 +161,7 @@ public final class Dungeons {
                 }continue;
             }
             d.lastActive=now;data.setDirty();
-            for(Mob stray:world.getEntitiesOfClass(Mob.class,new AABB(d.x,d.minimumY,d.z,d.x+48,d.y+17,d.z+48),m->m instanceof net.minecraft.world.entity.monster.Enemy&&!m.getTags().contains("regnum_dungeon")))stray.discard();
+            for(Mob stray:world.getEntitiesOfClass(Mob.class,new AABB(d.x,d.minimumY,d.z,d.x+48,d.maximumY+1,d.z+48),m->m instanceof net.minecraft.world.entity.monster.Enemy&&!m.getTags().contains("regnum_dungeon")))stray.discard();
             boolean loaded=true;for(int cx=d.x>>4;cx<=(d.x+47)>>4;cx++)for(int cz=d.z>>4;cz<=(d.z+47)>>4;cz++)if(!world.getChunkSource().hasChunk(cx,cz)||!world.areEntitiesLoaded(ChunkPos.asLong(cx,cz)))loaded=false;
             if(!loaded)continue;
             // Loaded entity UUIDs survive restarts; missing entities get a cooldown, never an immediate duplicate.
@@ -162,25 +176,38 @@ public final class Dungeons {
                 final int r=room;BlockPos center=DungeonStructures.room(d,room);int rx=center.getX(),rz=center.getZ();
                 if(d.bossDefeated||d.cleared[room]||d.started[room]||d.mobs.containsValue(room)||d.mobs.size()>=config.maxMobsPerDungeon||now<d.roomReady[room]||room==8&&(d.bossDefeated||now<d.bossReady))continue;
                 if(room==8&&(!d.cleared[4]||clearedRooms(d)<config.roomsToUnlockBoss))continue;
-                if(players.stream().noneMatch(p->p.distanceToSqr(rx,d.y,rz)<(r==8?400:225)))continue;
-                int count=room==8?1:config.spawnCount+d.tier()-1+(d.level>=3?1:0);
+                if(players.stream().noneMatch(p->p.distanceToSqr(rx,center.getY(),rz)<(r==8?144:81)))continue;
+                int count=room==8?1:Math.min(config.maxMobsPerDungeon,config.spawnCount+d.tier()-1+(d.level>=3?1:0));
                 if(config.maxMobsPerDungeon-d.mobs.size()<count)continue;
                 d.started[room]=true;data.setDirty();
-                for(int n=0;n<count&&d.mobs.size()<config.maxMobsPerDungeon;n++) spawn(world,d,room,rx+(n%3)-1,rz+(n/3)-1);
+                for(int n=0;n<count&&d.mobs.size()<config.maxMobsPerDungeon;n++) spawn(world,d,room,rx+(n%3)-1,rz+(n/3)-1,room==8||room==4&&n==0);
                 if(config.announcements)for(ServerPlayer player:players)if(player.distanceToSqr(rx,d.y,rz)<225)player.displayClientMessage(Component.literal(room==8?"The dungeon lord awakens!":"Dungeon guardians awaken.").withStyle(ChatFormatting.GOLD),true);
                 data.setDirty();
             }
             LivingEntity boss=d.mobs.entrySet().stream().filter(e->e.getValue()==8).map(e->world.getEntity(e.getKey())).filter(e->e instanceof LivingEntity).map(e->(LivingEntity)e).findFirst().orElse(null);
-            for(var encounter:d.mobs.entrySet())if(encounter.getValue()==4&&world.getEntity(encounter.getKey()) instanceof LivingEntity elite)bossMechanic(world,d,elite,players,now);
+            for(var encounter:d.mobs.entrySet())if(encounter.getValue()==4&&world.getEntity(encounter.getKey()) instanceof LivingEntity elite&&elite.getTags().contains("regnum_elite"))bossMechanic(world,d,elite,players,now);
             bar.setVisible(boss!=null);if(boss!=null){bar.setName(boss.getDisplayName());bar.setProgress(Math.clamp(boss.getHealth()/boss.getMaxHealth(),0,1));players.forEach(bar::addPlayer);bossMechanic(world,d,boss,players,now);}
         }
     }
-    private static void spawn(ServerLevel world,Dungeon d,int room,int x,int z) {
-        boolean boss=room==8,elite=boss||room==4||d.level>=4;
+    private static void spawn(ServerLevel world,Dungeon d,int room,int x,int z,boolean champion) {
+        boolean boss=room==8,elite=champion||d.level>=4;
         EntityType<?> type= d.tier()==1?(room%3==0&&!boss?EntityType.SPIDER:EntityType.ZOMBIE):d.tier()==2?(boss?EntityType.WITHER_SKELETON:room%2==0?EntityType.HUSK:EntityType.SKELETON):(boss?EntityType.PIGLIN_BRUTE:room%2==0?EntityType.VINDICATOR:EntityType.PILLAGER);
         Entity entity=type.create(world);
         if(!(entity instanceof Mob mob))return;
-        mob.moveTo(x+0.5,DungeonStructures.floor(d,room),z+0.5,0,0);mob.setPersistenceRequired();
+        // Search actual collision geometry: slopes, repaired rooms and gallery stairs may differ from the room anchor.
+        boolean placed=false;
+        for(int radius=0;radius<=5&&!placed;radius++)for(int dx=-radius;dx<=radius&&!placed;dx++)for(int dz=-radius;dz<=radius&&!placed;dz++) {
+            if(Math.max(Math.abs(dx),Math.abs(dz))!=radius)continue;
+            for(int dy:new int[]{0,1,-1,2,-2}) {
+                BlockPos feet=new BlockPos(x+dx,DungeonStructures.floor(d,room)+dy,z+dz);
+                if(!d.contains(d.dimension,feet.getX(),feet.getY(),feet.getZ())||!world.getFluidState(feet).isEmpty()
+                    ||!world.getBlockState(feet.below()).isFaceSturdy(world,feet.below(),net.minecraft.core.Direction.UP))continue;
+                mob.moveTo(feet.getX()+0.5,feet.getY(),feet.getZ()+0.5,0,0);
+                if(world.noCollision(mob)&&world.getEntities(mob,mob.getBoundingBox()).isEmpty()){placed=true;break;}
+            }
+        }
+        if(!placed)return;
+        mob.setPersistenceRequired();
         if(mob instanceof net.minecraft.world.entity.monster.Zombie zombie)zombie.setBaby(false);
         if(mob instanceof net.minecraft.world.entity.monster.piglin.AbstractPiglin piglin)piglin.setImmuneToZombification(true);
         double scale=(1+(d.level-1)*0.22)*config.difficultyMultiplier;
@@ -190,17 +217,19 @@ public final class Dungeons {
         mob.setItemSlot(EquipmentSlot.MAINHAND,new ItemStack(type==EntityType.PILLAGER?Items.CROSSBOW:type==EntityType.SKELETON?Items.BOW:d.tier()==1?Items.IRON_PICKAXE:Items.IRON_AXE));
         if(elite)mob.setItemSlot(EquipmentSlot.CHEST,new ItemStack(d.tier()==3?Items.DIAMOND_CHESTPLATE:Items.IRON_CHESTPLATE));
         for(EquipmentSlot slot:EquipmentSlot.values())mob.setDropChance(slot,0);
-        mob.setCustomName(Component.literal(boss?DungeonTypes.get(d.type).boss():room==4?"Relic Guardian · Elite":elite?"Dungeon Elite":"Dungeon Guardian").withStyle(boss?ChatFormatting.GOLD:ChatFormatting.GRAY));mob.setCustomNameVisible(elite);
+        mob.setCustomName(Component.literal(boss?DungeonTypes.get(d.type).boss():champion?"Relic Guardian · Elite":elite?"Dungeon Elite":"Dungeon Guardian").withStyle(boss?ChatFormatting.GOLD:ChatFormatting.GRAY));mob.setCustomNameVisible(elite);
         if(elite){mob.addEffect(new net.minecraft.world.effect.MobEffectInstance(net.minecraft.world.effect.MobEffects.GLOWING,Integer.MAX_VALUE,0,false,false));mob.addEffect(new net.minecraft.world.effect.MobEffectInstance(net.minecraft.world.effect.MobEffects.DAMAGE_RESISTANCE,Integer.MAX_VALUE,0,false,false));}
+        if(champion)mob.addTag("regnum_elite");
         mob.addTag("regnum_dungeon");mob.addTag("regnum_encounter:"+d.id+":"+room+":"+d.cycle); if(world.addFreshEntity(mob))d.mobs.put(mob.getUUID(),room);
     }
     private static void complete(ServerLevel world,Dungeon d,ServerPlayer killer) {
         if(d.bossDefeated)return;
         d.cleared[8]=true;d.bossDefeated=true;d.bossReady=System.currentTimeMillis()+config.bossCooldownSeconds*1000;d.escalationAt=System.currentTimeMillis();int power=d.level;d.level=1;
+        clear(world,d);
         DungeonData data=DungeonData.get(world.getServer());data.setDirty();
         for(ServerPlayer p:world.players())if(p.isAlive()&&!p.isSpectator()&&d.contains(d.dimension,p.getBlockX(),p.getBlockY(),p.getBlockZ())&&p.distanceToSqr(d.x+40,d.y,d.z+40)<576) {
             if(!d.rewarded.add(p.getUUID()))continue;
-            CompoundTag claim=new CompoundTag();claim.putUUID("Player",p.getUUID());claim.putLong("Cycle",d.cycle);claim.putInt("Power",power);d.pending.add(claim);
+            CompoundTag claim=new CompoundTag();claim.putUUID("Player",p.getUUID());claim.putLong("Cycle",d.cycle);claim.putInt("Power",power);DungeonRewardRules.prepare(claim,d,config);d.pending.add(claim);
             p.sendSystemMessage(Component.literal(d.name()+" cleared! Rewards will arrive when inventory space is available.").withStyle(ChatFormatting.GOLD));
         }
         data.setDirty();world.getServer().overworld().getDataStorage().save();deliver(world.getServer(),d);
@@ -208,19 +237,23 @@ public final class Dungeons {
     private static void deliver(MinecraftServer server,Dungeon d) {
         for(CompoundTag claim:List.copyOf(d.pending)) {
             ServerPlayer p=server.getPlayerList().getPlayer(claim.getUUID("Player"));if(p==null||!p.isAlive()||p.isSpectator())continue;
-            int power=claim.getInt("Power");long cycle=claim.getLong("Cycle");
+            if(!claim.contains("RewardVersion")) {
+                DungeonRewardRules.prepare(claim,d,config);
+                DungeonData.get(server).setDirty();server.overworld().getDataStorage().save();
+            }
+            long cycle=claim.getLong("Cycle");
             boolean roomReward=claim.contains("Room");
             List<ItemStack> loot=new ArrayList<>();
-            loot.add(new ItemStack(DungeonItems.material(d.type),d.tier()+power+2));
+            loot.add(new ItemStack(DungeonItems.material(d.type),claim.getInt("Resources")));
             if(!roomReward)loot.add(new ItemStack(DungeonItems.trophy(d.type)));
-            if(!roomReward)loot.add(new ItemStack(DungeonItems.CORRUPTED_CRYSTAL,Math.max(1,power)));
+            if(claim.getInt("Crystals")>0)loot.add(new ItemStack(DungeonItems.CORRUPTED_CRYSTAL,claim.getInt("Crystals")));
             var table=server.reloadableRegistries().getLootTable(ResourceKey.create(Registries.LOOT_TABLE,ResourceLocation.parse(DungeonTypes.get(d.type).lootTable())));
             var params=new net.minecraft.world.level.storage.loot.LootParams.Builder(p.serverLevel())
                     .withParameter(net.minecraft.world.level.storage.loot.parameters.LootContextParams.ORIGIN,p.position())
                     .create(net.minecraft.world.level.storage.loot.parameters.LootContextParamSets.CHEST);
             if(!roomReward)loot.addAll(table.getRandomItems(params,d.id.getLeastSignificantBits()^cycle^p.getUUID().getMostSignificantBits()));
             boolean paid=false;
-            try {Class<?> api=Class.forName("dev.regnum.economy.money.DungeonRewards");paid=(boolean)api.getMethod("grant",ServerPlayer.class,String.class,long.class,List.class).invoke(null,p,d.id+":"+cycle+(roomReward?":room:"+claim.getInt("Room"):""),roomReward?0L:config.coins[d.tier()-1]*power,loot);}
+            try {Class<?> api=Class.forName("dev.regnum.economy.money.DungeonRewards");paid=(boolean)api.getMethod("grant",ServerPlayer.class,String.class,long.class,List.class).invoke(null,p,d.id+":"+cycle+(roomReward?":room:"+claim.getInt("Room"):""),claim.getLong("Coins"),loot);}
             catch(ClassNotFoundException absent) {
                 // At-most-once standalone fallback: consume eligibility durably before handing out vanilla loot.
                 d.pending.remove(claim);DungeonData.get(server).setDirty();server.overworld().getDataStorage().save();
@@ -231,19 +264,40 @@ public final class Dungeons {
         }
     }
     private static void bossMechanic(ServerLevel world,Dungeon d,LivingEntity boss,List<ServerPlayer> players,long now) {
-        long due=bossWindup.getOrDefault(boss.getUUID(),0L);
-        if(due==0){bossWindup.put(boss.getUUID(),now+8000);return;}
-        if(now>=due&&now<due+2000){for(ServerPlayer p:players)p.displayClientMessage(Component.literal(d.tier()==1?"Foreman winds up a crushing blow — move away!":d.tier()==2?"The crypt fills with a cursed chill — spread out!":"Castellan prepares a ground slam — leave the arena center!").withStyle(ChatFormatting.RED),true);bossWindup.put(boss.getUUID(),-(now+2000));}
-        else if(due<0&&now>=-due){
-            for(ServerPlayer p:players)if(p.distanceToSqr(boss)<(d.tier()==2?64:36)){
-                p.hurt(world.damageSources().mobAttack(boss),3*d.tier());
-                p.addEffect(new net.minecraft.world.effect.MobEffectInstance(d.tier()==2?net.minecraft.world.effect.MobEffects.WEAKNESS:net.minecraft.world.effect.MobEffects.MOVEMENT_SLOWDOWN,80,1));
-                if(d.tier()==3)p.knockback(1,boss.getX()-p.getX(),boss.getZ()-p.getZ());
-            }bossWindup.put(boss.getUUID(),now+8000);
-        }else if(due>0&&now>=due+2000)bossWindup.put(boss.getUUID(),now+8000);
+        Telegraph attack=bossWindup.get(boss.getUUID());
+        if(attack==null){bossWindup.put(boss.getUUID(),new Telegraph(now+8000,boss.position(),false));return;}
+        if(now<attack.due())return;
+        if(!attack.casting()) {
+            // Freeze the strike location when warned so players can actually dodge a pursuing boss.
+            var origin=boss.position();
+            bossWindup.put(boss.getUUID(),new Telegraph(now+2000,origin,true));
+            double radius=d.tier()==2?8:6;
+            for(int i=0;i<32;i++) {
+                double angle=i*Math.PI/16;
+                world.sendParticles(net.minecraft.core.particles.ParticleTypes.FLAME,origin.x+Math.cos(angle)*radius,origin.y+0.2,origin.z+Math.sin(angle)*radius,1,0,0,0,0);
+            }
+            for(ServerPlayer p:players)p.displayClientMessage(Component.literal(d.tier()==1?"Crushing blow incoming — leave the marked area!":d.tier()==2?"Cursed chill incoming — leave the marked area!":"Ground slam incoming — leave the marked area!").withStyle(ChatFormatting.RED),true);
+            return;
+        }
+        for(ServerPlayer p:players)if(p.distanceToSqr(attack.origin())<(d.tier()==2?64:36)) {
+            p.hurt(world.damageSources().mobAttack(boss),3*d.tier());
+            p.addEffect(new net.minecraft.world.effect.MobEffectInstance(d.tier()==2?net.minecraft.world.effect.MobEffects.WEAKNESS:net.minecraft.world.effect.MobEffects.MOVEMENT_SLOWDOWN,80,1));
+            if(d.tier()==3)p.knockback(1,attack.origin().x-p.getX(),attack.origin().z-p.getZ());
+        }
+        bossWindup.put(boss.getUUID(),new Telegraph(now+8000,boss.position(),false));
     }
+
     static void clear(ServerLevel world,Dungeon d) {
-        for(UUID id:d.mobs.keySet()){bossWindup.remove(id);Entity e=world.getEntity(id);if(e!=null)e.discard();}d.mobs.clear();
+        // Also sweep loaded orphans and projectiles; unloaded stale mobs are rejected by cycle on ENTITY_LOAD.
+        var owned=new ArrayList<Entity>();String prefix="regnum_encounter:"+d.id+":",projectilePrefix="regnum_projectile:"+d.id+":";
+        for(Entity entity:world.getAllEntities()) {
+            boolean encounter=d.mobs.containsKey(entity.getUUID())||entity.getTags().stream().anyMatch(t->t.startsWith(prefix)||t.startsWith(projectilePrefix));
+            boolean projectile=entity instanceof net.minecraft.world.entity.projectile.Projectile shot&&shot.getOwner()!=null
+                &&(d.mobs.containsKey(shot.getOwner().getUUID())||shot.getOwner().getTags().stream().anyMatch(t->t.startsWith(prefix)));
+            if(encounter||projectile)owned.add(entity);
+        }
+        for(Entity entity:owned){bossWindup.remove(entity.getUUID());entity.discard();}
+        d.mobs.clear();
         bossWindup.remove(d.id);
         ServerBossEvent bar=bars.remove(d.id);if(bar!=null)bar.removeAllPlayers();
     }
