@@ -40,12 +40,13 @@ public final class Dungeons {
     public static boolean suppressNatural(Level level,BlockPos pos){return at(level,pos)!=null;}
 
     private static final Map<UUID,UUID> presence=new HashMap<>();
+    private static final Map<UUID,UUID> bossAreaPresence=new HashMap<>();
     private static final Map<UUID,ServerBossEvent> bars=new HashMap<>();
     private static final Map<String,Set<Long>> fresh=new HashMap<>();
     private static final Set<String> candidates=new HashSet<>();
     public static void initialize() {
         config=DungeonConfig.load();
-        ServerLifecycleEvents.SERVER_STOPPED.register(s->{presence.clear();bars.clear();fresh.clear();candidates.clear();DungeonPlacement.clear();DungeonAdmin.clear();bossWindup.clear();});
+        ServerLifecycleEvents.SERVER_STOPPED.register(s->{presence.clear();bossAreaPresence.clear();bars.clear();fresh.clear();candidates.clear();DungeonPlacement.clear();DungeonAdmin.clear();bossWindup.clear();});
         ServerChunkEvents.CHUNK_GENERATE.register((world,chunk)->{
             if(!config.generation||!world.dimension().equals(Level.OVERWORLD)) return;
             var set=fresh.computeIfAbsent(world.dimension().location().toString(),k->new HashSet<>());
@@ -132,7 +133,29 @@ public final class Dungeons {
     }
     public static boolean protectedAt(Level world,BlockPos pos) {return config!=null&&config.protection&&at(world,pos)!=null;}
     /** Optional Nations bridge uses vanilla argument types, avoiding a hard mod dependency. */
-    public static ListTag snapshot(MinecraftServer server) {ListTag t=new ListTag();DungeonData.get(server).entries.values().forEach(d->t.add(d.save()));return t;}
+    public static ListTag snapshot(MinecraftServer server) {
+        ListTag records = new ListTag();
+        DungeonData.get(server).entries.values().forEach(d -> records.add(d.save()));
+        return records;
+    }
+
+    public static ListTag atlasSnapshot(MinecraftServer server) {
+        ListTag markers = new ListTag();
+        DungeonData.get(server).entries.values().forEach(d -> markers.add(d.atlasMarker()));
+        return markers;
+    }
+
+    static void atlasChanged(ServerLevel world) {
+        if (!net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("regnum-nations")) return;
+        try {
+            Class.forName("dev.sakhno.regnum.nations.kingdom.PoliticalMapServer")
+                    .getMethod("dungeonsChanged", ServerLevel.class).invoke(null, world);
+        } catch (NoSuchMethodException olderNations) {
+            // Older Nations can still read the snapshot on manual refresh.
+        } catch (ReflectiveOperationException | LinkageError error) {
+            RegnumWorld.LOGGER.warn("Could not notify the Nations atlas of a dungeon change", error);
+        }
+    }
     public static boolean neutral(MinecraftServer server,String dimension,int cx,int cz) {
         return DungeonData.get(server).find(dimension,cx,cz)!=null;
     }
@@ -143,10 +166,12 @@ public final class Dungeons {
         long now=System.currentTimeMillis();
         for(ServerPlayer p:server.getPlayerList().getPlayers()) {
             Dungeon d=at(p.level(),p.blockPosition());UUID next=d==null?null:d.id, old=presence.get(p.getUUID());
-            if(!Objects.equals(next,old)&&config.announcements) p.displayClientMessage(Component.literal(d==null?"You left the dungeon.":d.name()+" · Tier "+d.tier()+" · "+d.power()+" · PvP ALWAYS ENABLED · clear "+config.roomsToUnlockBoss+" rooms and the elite to awaken the boss").withStyle(ChatFormatting.GOLD),false);
+            if(!Objects.equals(next,old)&&config.announcements) p.displayClientMessage(Component.literal(d==null?"You left the dungeon.":d.name()+" · Tier "+d.tier()+" · "+d.power()+" · PvP ALWAYS ENABLED · clear "+config.roomsToUnlockBoss+" rooms and defeat the elite to unlock the boss encounter").withStyle(ChatFormatting.GOLD),false);
             if(next==null)presence.remove(p.getUUID());else presence.put(p.getUUID(),next);
+            updateBossArea(p, d);
         }
         presence.keySet().removeIf(id->server.getPlayerList().getPlayer(id)==null);
+        bossAreaPresence.keySet().removeIf(id -> server.getPlayerList().getPlayer(id) == null);
         for(Dungeon d:data.entries.values()) {
             if(server.getTickCount()%100==0)deliver(server,d);
             int level=1+(int)Math.min(4,Math.max(0,(now-d.escalationAt)/(config.escalationSeconds*1000)));
@@ -173,30 +198,73 @@ public final class Dungeons {
             }
             for(int room=0;room<9;room++)if(d.started[room]&&!d.cleared[room]&&!d.mobs.containsValue(room)){d.started[room]=false;d.roomReady[room]=now+config.spawnCooldownSeconds*1000;data.setDirty();}
             if(d.bossDefeated&&now>=d.bossReady){clear(world,d);d.bossDefeated=false;d.cycle++;d.rewarded.clear();Arrays.fill(d.cleared,false);Arrays.fill(d.started,false);Arrays.fill(d.roomReady,0);data.setDirty();}
-            for(int room=0;room<9;room++) {
-                final int r=room;BlockPos center=DungeonStructures.room(d,room);int rx=center.getX(),rz=center.getZ();
-                if(d.bossDefeated||d.cleared[room]||d.started[room]||d.mobs.containsValue(room)||d.mobs.size()>=config.maxMobsPerDungeon||now<d.roomReady[room]||room==8&&(d.bossDefeated||now<d.bossReady))continue;
-                if(room==8&&(!d.cleared[4]||clearedRooms(d)<config.roomsToUnlockBoss))continue;
-                if(players.stream().noneMatch(p->p.distanceToSqr(rx,center.getY(),rz)<(r==8?144:81)))continue;
-                int count=room==8?1:Math.min(config.maxMobsPerDungeon,config.spawnCount+d.tier()-1+(d.level>=3?1:0));
-                if(config.maxMobsPerDungeon-d.mobs.size()<count)continue;
-                d.started[room]=true;data.setDirty();
-                for(int n=0;n<count&&d.mobs.size()<config.maxMobsPerDungeon;n++) spawn(world,d,room,rx+(n%3)-1,rz+(n/3)-1,room==8||room==4&&n==0);
-                DungeonEncounters.spawned(d,room,now,config.spawnCooldownSeconds*1000L);
-                if(d.started[room]&&config.announcements)for(ServerPlayer player:players)if(player.distanceToSqr(rx,d.y,rz)<225)player.displayClientMessage(Component.literal(room==8?"The dungeon lord awakens!":"Dungeon guardians awaken.").withStyle(ChatFormatting.GOLD),true);
-                data.setDirty();
+            for (int room = 0; room < 9; room++) {
+                triggerEncounter(world, d, room, players, now);
             }
             LivingEntity boss=d.mobs.entrySet().stream().filter(e->e.getValue()==8).map(e->world.getEntity(e.getKey())).filter(e->e instanceof LivingEntity).map(e->(LivingEntity)e).findFirst().orElse(null);
             for(var encounter:d.mobs.entrySet())if(encounter.getValue()==4&&world.getEntity(encounter.getKey()) instanceof LivingEntity elite&&elite.getTags().contains("regnum_elite"))bossMechanic(world,d,elite,players,now);
             bar.setVisible(boss!=null);if(boss!=null){bar.setName(boss.getDisplayName());bar.setProgress(Math.clamp(boss.getHealth()/boss.getMaxHealth(),0,1));players.forEach(bar::addPlayer);bossMechanic(world,d,boss,players,now);}
         }
     }
-    static void spawn(ServerLevel world,Dungeon d,int room,int x,int z,boolean champion) {
-        if(d.bossDefeated||d.cleared[room]||d.mobs.size()>=config.maxMobsPerDungeon||room==8&&d.mobs.containsValue(8))return;
+    private static boolean nearRoom(ServerPlayer player, BlockPos center, int rangeSquared) {
+        return player.distanceToSqr(center.getX(), center.getY(), center.getZ()) < rangeSquared;
+    }
+
+    static void updateBossArea(ServerPlayer player, Dungeon d) {
+        if (d == null || !player.isAlive() || player.isSpectator()
+                || !nearRoom(player, DungeonStructures.room(d, 8), 144)) {
+            bossAreaPresence.remove(player.getUUID());
+            return;
+        }
+        UUID previous = bossAreaPresence.put(player.getUUID(), d.id);
+        if (!d.id.equals(previous) && config.announcements) {
+            player.sendSystemMessage(Component.translatableWithFallback("dungeon.regnum-world.boss_area", "You reached the boss chamber.").withStyle(ChatFormatting.GOLD));
+        }
+    }
+
+    static void triggerEncounter(ServerLevel world, Dungeon d, int room, List<ServerPlayer> players, long now) {
+        boolean bossRoom = room == 8;
+        if (d.bossDefeated || d.cleared[room] || d.started[room] || d.mobs.containsValue(room)
+                || d.mobs.size() >= config.maxMobsPerDungeon || now < d.roomReady[room]) return;
+        if (bossRoom && (now < d.bossReady || !d.cleared[4] || clearedRooms(d) < config.roomsToUnlockBoss)) return;
+        BlockPos center = DungeonStructures.room(d, room);
+        if (players.stream().noneMatch(p -> nearRoom(p, center, bossRoom ? 144 : 81))) return;
+        int count = bossRoom ? 1 : Math.min(config.maxMobsPerDungeon, config.spawnCount + d.tier() - 1 + (d.level >= 3 ? 1 : 0));
+        if (config.maxMobsPerDungeon - d.mobs.size() < count) return;
+
+        DungeonData data = DungeonData.get(world.getServer());
+        d.started[room] = true;
+        data.setDirty();
+        Mob boss = null;
+        for (int n = 0; n < count && d.mobs.size() < config.maxMobsPerDungeon; n++) {
+            Mob spawned = spawn(world, d, room, center.getX() + n % 3 - 1, center.getZ() + n / 3 - 1,
+                    bossRoom || room == 4 && n == 0);
+            if (bossRoom) boss = spawned;
+        }
+        DungeonEncounters.spawned(d, room, now, config.spawnCooldownSeconds * 1000L);
+        data.setDirty();
+
+        if (!config.announcements) return;
+        if (boss != null) {
+            Component name = Component.translatableWithFallback("dungeon.regnum-world.boss_name." + d.type,
+                    DungeonTypes.get(d.type).boss());
+            Component appearance = Component.translatableWithFallback("dungeon.regnum-world.boss_appeared", "%s has appeared!", name).withStyle(ChatFormatting.GOLD);
+            players.forEach(player -> player.sendSystemMessage(appearance));
+        } else if (!bossRoom && d.started[room]) {
+            for (ServerPlayer player : players) {
+                if (player.distanceToSqr(center.getX(), d.y, center.getZ()) < 225) {
+                    player.displayClientMessage(Component.literal("Dungeon guardians awaken.").withStyle(ChatFormatting.GOLD), true);
+                }
+            }
+        }
+    }
+
+    static Mob spawn(ServerLevel world,Dungeon d,int room,int x,int z,boolean champion) {
+        if(d.bossDefeated||d.cleared[room]||d.mobs.size()>=config.maxMobsPerDungeon||room==8&&d.mobs.containsValue(8))return null;
         boolean boss=room==8,elite=champion||d.level>=4;
         EntityType<?> type= d.tier()==1?(room%3==0&&!boss?EntityType.SPIDER:EntityType.ZOMBIE):d.tier()==2?(boss?EntityType.WITHER_SKELETON:room%2==0?EntityType.HUSK:EntityType.SKELETON):(boss?EntityType.PIGLIN_BRUTE:room%2==0?EntityType.VINDICATOR:EntityType.PILLAGER);
         Entity entity=type.create(world);
-        if(!(entity instanceof Mob mob))return;
+        if(!(entity instanceof Mob mob))return null;
         // Search actual collision geometry: slopes, repaired rooms and gallery stairs may differ from the room anchor.
         boolean placed=false;
         for(int radius=0;radius<=5&&!placed;radius++)for(int dx=-radius;dx<=radius&&!placed;dx++)for(int dz=-radius;dz<=radius&&!placed;dz++) {
@@ -209,7 +277,7 @@ public final class Dungeons {
                 if(world.noCollision(mob)&&world.getEntities(mob,mob.getBoundingBox()).isEmpty()){placed=true;break;}
             }
         }
-        if(!placed)return;
+        if(!placed)return null;
         mob.setPersistenceRequired();
         if(mob instanceof net.minecraft.world.entity.monster.Zombie zombie)zombie.setBaby(false);
         if(mob instanceof net.minecraft.world.entity.monster.piglin.AbstractPiglin piglin)piglin.setImmuneToZombification(true);
@@ -223,7 +291,11 @@ public final class Dungeons {
         mob.setCustomName(Component.literal(boss?DungeonTypes.get(d.type).boss():champion?"Relic Guardian · Elite":elite?"Dungeon Elite":"Dungeon Guardian").withStyle(boss?ChatFormatting.GOLD:ChatFormatting.GRAY));mob.setCustomNameVisible(elite);
         if(elite){mob.addEffect(new net.minecraft.world.effect.MobEffectInstance(net.minecraft.world.effect.MobEffects.GLOWING,Integer.MAX_VALUE,0,false,false));mob.addEffect(new net.minecraft.world.effect.MobEffectInstance(net.minecraft.world.effect.MobEffects.DAMAGE_RESISTANCE,Integer.MAX_VALUE,0,false,false));}
         if(champion)mob.addTag("regnum_elite");
-        mob.addTag("regnum_dungeon");mob.addTag("regnum_encounter:"+d.id+":"+room+":"+d.cycle); if(world.addFreshEntity(mob)&&!mob.isRemoved())d.mobs.put(mob.getUUID(),room);
+        mob.addTag("regnum_dungeon");
+        mob.addTag("regnum_encounter:"+d.id+":"+room+":"+d.cycle);
+        if (!world.addFreshEntity(mob) || mob.isRemoved()) return null;
+        d.mobs.put(mob.getUUID(), room);
+        return mob;
     }
     private static void complete(ServerLevel world,Dungeon d,ServerPlayer killer) {
         if(d.bossDefeated)return;

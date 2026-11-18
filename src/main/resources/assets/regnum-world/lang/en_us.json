@@ -1,4 +1,9 @@
 {
+  "dungeon.regnum-world.boss_area": "You reached the boss chamber.",
+  "dungeon.regnum-world.boss_appeared": "%s has appeared!",
+  "dungeon.regnum-world.boss_name.mine": "Foreman of the Forgotten",
+  "dungeon.regnum-world.boss_name.catacombs": "The Crypt Warden",
+  "dungeon.regnum-world.boss_name.bastion": "Bastion Castellan",
   "command.regnum.prefix": "[Regnum World] ",
   "command.regnum.reload.success": "Configuration reloaded successfully!",
   "command.regnum.error.player_only": "This command must be run by a player in the world.",

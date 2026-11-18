@@ -238,6 +238,6 @@ final class DungeonPlacement {
             // Operators/players standing in a validated footprint must not be buried in its new foundation or walls.
             for(ServerPlayer player:List.copyOf(world.players()))if(player.getX()>=d.x&&player.getX()<d.x+48&&player.getZ()>=d.z&&player.getZ()<d.z+48&&player.getY()>=plan.bottom()&&player.getY()<=plan.top()+1)
                 player.teleportTo(world,d.x+24.5,d.y,d.z+8.5,player.getYRot(),player.getXRot());
-        }finally{Dungeons.building=false;}
+        }finally{Dungeons.building=false;Dungeons.atlasChanged(world);}
     }
 }

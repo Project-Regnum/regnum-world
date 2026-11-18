@@ -57,7 +57,7 @@ final class DungeonAdmin {
                     else {Dungeons.clear(world,d);d.cycle++;Arrays.fill(d.started,false);Arrays.fill(d.cleared,false);Arrays.fill(d.roomReady,0);d.rewarded.clear();d.level=1;d.escalationAt=System.currentTimeMillis();d.bossDefeated=false;d.bossReady=0;
                         if(action.equals("remove")){DungeonData data=DungeonData.get(source.getServer());data.remove(d);if(!d.pending.isEmpty())data.retired.add(d);}
                     }
-                    DungeonData.get(source.getServer()).setDirty();source.getServer().overworld().getDataStorage().save();source.sendSuccess(()->Component.literal("Dungeon "+action+" complete."),true);
+                    DungeonData.get(source.getServer()).setDirty();source.getServer().overworld().getDataStorage().save();Dungeons.atlasChanged(world);source.sendSuccess(()->Component.literal("Dungeon "+action+" complete."),true);
                 });return 1;
             })));
     }

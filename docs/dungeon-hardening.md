@@ -81,3 +81,19 @@ and can replace creative operator edits within it; inspect before confirming.
 Existing protection, creative operator access, permanent PvP hooks, alternate
 routes and mountain escape ladders are retained. Geometry tests cover all three
 themes; live combat, adjacent terrain access and PvP still need playtesting.
+
+## Living Atlas and boss messages
+
+World exposes display metadata for active registrations through the optional Nations
+bridge. The Nations political map shows entrances and footprints in the player's
+dimension. Opening or refreshing the map reads the current registry, and generation,
+removal and recovery also notify an already-open map. Atlas reads use saved
+coordinates and do not load dungeon chunks. Removed dungeons with pending rewards
+remain in the mailbox only. Existing dungeon records require no conversion.
+
+Approaching the boss area sends a personal discovery message. The encounter timer,
+room unlock requirements and spawn radius are unchanged. A separate chat message
+goes to the living participants in the dungeon when the server accepts the boss.
+An existing boss loaded from disk does not replay its appearance message. A
+successful new spawn after a reset or recovery produces its own message. Boss
+messages use English and Ukrainian client translations with English fallbacks.

@@ -52,14 +52,20 @@ public final class DungeonData extends SavedData {
         public boolean contains(String dim,int px,int py,int pz) {
             return dimension.equals(dim)&&px>=x&&px<x+48&&pz>=z&&pz<z+48&&py>=minimumY&&py<=maximumY;
         }
-        public CompoundTag save() {
+        CompoundTag atlasMarker() {
             CompoundTag t=new CompoundTag(); t.putUUID("Id",id);t.putString("Type",type);t.putString("Name",name());t.putInt("Tier",tier());t.putInt("PartySize",partySize());t.putString("Dimension",dimension);
             t.putInt("X",x);t.putInt("Y",y);t.putInt("Z",z);
             t.putIntArray("Bounds",new int[]{x,minimumY,z,x+47,maximumY,z+47});
-            t.putIntArray("Entrances",new int[]{x+24,frontY,z,x+24,backY,z+47});t.putInt("FrontY",frontY);t.putInt("BackY",backY);t.putString("Activity",state());t.putInt("Level",level);
+            t.putIntArray("Entrances",new int[]{x+24,frontY,z,x+24,backY,z+47});t.putString("Activity",state());t.putInt("Level",level);
+            t.putBoolean("Defeated",bossDefeated);
+            return t;
+        }
+        public CompoundTag save() {
+            CompoundTag t = atlasMarker();
+            t.putInt("FrontY",frontY);t.putInt("BackY",backY);
             t.putInt("LayoutVersion",layoutVersion);t.putLong("LastActive",lastActive);
             int[] clear=new int[9],start=new int[9];for(int i=0;i<9;i++){clear[i]=cleared[i]?1:0;start[i]=started[i]?1:0;}t.putIntArray("Cleared",clear);t.putIntArray("Started",start);
-            t.putInt("MaximumY",maximumY);t.putInt("MinimumY",minimumY);t.putLong("Escalation",escalationAt);t.putLong("BossReady",bossReady);t.putLong("Cycle",cycle);t.putBoolean("Defeated",bossDefeated);
+            t.putInt("MaximumY",maximumY);t.putInt("MinimumY",minimumY);t.putLong("Escalation",escalationAt);t.putLong("BossReady",bossReady);t.putLong("Cycle",cycle);
             t.putLongArray("Rooms",roomReady); ListTag ms=new ListTag();
             mobs.forEach((uuid,room)->{CompoundTag m=new CompoundTag();m.putUUID("Id",uuid);m.putInt("Room",room);ms.add(m);}); t.put("Mobs",ms);
             ListTag rs=new ListTag(); for(UUID uuid:rewarded) {CompoundTag r=new CompoundTag();r.putUUID("Id",uuid);rs.add(r);} t.put("Rewarded",rs); ListTag pendingTags=new ListTag();pending.forEach(p->pendingTags.add(p.copy()));t.put("Pending",pendingTags);return t;

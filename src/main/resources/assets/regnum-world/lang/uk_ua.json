@@ -1,4 +1,9 @@
 {
+  "dungeon.regnum-world.boss_area": "Ви дісталися зали боса.",
+  "dungeon.regnum-world.boss_appeared": "З’явився бос «%s»!",
+  "dungeon.regnum-world.boss_name.mine": "Наглядач забутих",
+  "dungeon.regnum-world.boss_name.catacombs": "Вартовий крипти",
+  "dungeon.regnum-world.boss_name.bastion": "Кастелян бастіону",
   "command.regnum.prefix": "[Regnum World] ",
   "command.regnum.reload.success": "Конфігурацію успішно перезавантажено!",
   "command.regnum.error.player_only": "Цю команду може виконувати лише гравець у світі.",
