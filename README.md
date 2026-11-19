@@ -138,6 +138,17 @@ cd regnum-world
 The compiled mod JAR will be located at:
 `build/libs/regnum-world-1.0.0.jar`
 
+For the four-mod GameTest run, use JDK 25 for Gradle and a Java 21 toolchain
+for Minecraft. Loom 1.19.4 reads Agriculture's v2 class tweaker during the
+combined development launch. The standalone World production build uses the
+default Loom version.
+
+```sh
+./gradlew runGameTest -Ploom_version=1.19.4 \
+  -PintegrationMods=/path/to/nations.jar,/path/to/economy.jar,/path/to/agriculture.jar \
+  -PintegrationNationsJar=/path/to/nations.jar
+```
+
 ## Static dungeons (operators)
 
 `/regnum dungeon generate <mine|catacombs|bastion>` searches nearby; append `here` for the current chunk origin, or `force` to bypass terrain/spacing preferences. Explicit `<x> <z> [force]`, `preview` and `validate` remain available. Force and preview use clickable **CONFIRM / CANCEL** buttons or `/regnum dungeon confirm` and `/regnum dungeon cancel`, bound to the operator and target for 60 seconds. Buttons carry a six-character nonce so an old button cannot confirm a newer action. Claims, overlap, recognizable construction and intersecting structures remain protected. Ordinary stone/dirt blocks have no player-origin metadata, so inspect force previews before confirming.

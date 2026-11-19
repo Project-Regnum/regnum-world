@@ -201,18 +201,55 @@ public final class DungeonServerTests implements FabricGameTest {
         DungeonMailbox.freeze(server,claim,loot);
         var retried=DungeonMailbox.freeze(server,claim,java.util.List.of(new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.DIRT,64)));
         h.assertTrue(retried.size()==1&&retried.getFirst().is(net.minecraft.world.item.Items.DIAMOND)&&retried.getFirst().getCount()==2,"Actual loot must be frozen before delivery");
-        try {
-            var api=Class.forName("dev.regnum.economy.money.DungeonRewards");
-            var p=h.makeMockServerPlayerInLevel();p.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
-            p.connection=new net.minecraft.server.network.ServerGamePacketListenerImpl(server,new net.minecraft.network.Connection(net.minecraft.network.protocol.PacketFlow.SERVERBOUND),p,net.minecraft.server.network.CommonListenerCookie.createInitial(p.getGameProfile(),false));
-            var grant=api.getMethod("grant",net.minecraft.server.level.ServerPlayer.class,String.class,long.class,java.util.List.class);
-            String receipt="world-test:"+java.util.UUID.randomUUID();
-            h.assertTrue((boolean)grant.invoke(null,p,receipt,10L,retried),"Economy must accept a valid journalled reward");
-            h.assertTrue((boolean)grant.invoke(null,p,receipt,10L,retried)&&p.getInventory().countItem(net.minecraft.world.item.Items.DIAMOND)==2,"Receipt retry must not duplicate items");
-            for(int i=0;i<36;i++)p.getInventory().setItem(i,new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.COBBLESTONE,64));
-            h.assertTrue(!DungeonMailbox.canFit(p,retried),"World capacity check must reject a full inventory");
-            h.assertTrue(!(boolean)grant.invoke(null,p,receipt+":full",10L,retried),"Full inventory must keep reward pending");
-        }catch(ClassNotFoundException standalone){}
+        if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("regnum-economy")) {
+            var player = h.makeMockServerPlayerInLevel();
+            player.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
+            player.connection = new net.minecraft.server.network.ServerGamePacketListenerImpl(server,
+                    new net.minecraft.network.Connection(net.minecraft.network.protocol.PacketFlow.SERVERBOUND),
+                    player, net.minecraft.server.network.CommonListenerCookie.createInitial(player.getGameProfile(), false));
+            h.assertTrue(server.getPlayerList().getPlayer(player.getUUID()) == player, "The recipient must be online");
+            var balance = Class.forName("dev.regnum.economy.money.CoinBalances").getMethod("get", ServerPlayer.class);
+            var dungeon = new DungeonData.Dungeon("mine", h.getLevel().dimension().location().toString(),
+                    -8192, 64, -8192);
+            var data = DungeonData.get(server);
+            data.register(dungeon);
+            claim.putUUID("Player", player.getUUID());
+            claim.putInt("RewardVersion", 1);
+            claim.putLong("Coins", 10L);
+            dungeon.pending.add(claim);
+            try {
+                player.inventoryMenu.getCraftSlots().setItem(0, new net.minecraft.world.item.ItemStack(Blocks.DIRT));
+                Dungeons.deliver(server, dungeon);
+                h.assertTrue(dungeon.pending.contains(claim) && (long) balance.invoke(null, player) == 0
+                                && !player.inventoryMenu.getCraftSlots().isEmpty(),
+                        "A deferred reward preserves the claim, the wallet and the crafting grid");
+                player.inventoryMenu.getCraftSlots().clearContent();
+
+                Dungeons.deliver(server, dungeon);
+                h.assertTrue(dungeon.pending.isEmpty() && (long) balance.invoke(null, player) == 10
+                                && player.getInventory().countItem(net.minecraft.world.item.Items.DIAMOND) == 2,
+                        "World must credit the correct Economy wallet and deliver the frozen loot");
+
+                dungeon.pending.add(claim);
+                for (int slot = 0; slot < 36; slot++) {
+                    player.getInventory().setItem(slot, new net.minecraft.world.item.ItemStack(Blocks.COBBLESTONE, 64));
+                }
+                h.assertFalse(DungeonMailbox.canFit(player, retried), "Standalone capacity check rejects a full inventory");
+                Dungeons.deliver(server, dungeon);
+                h.assertTrue(dungeon.pending.isEmpty() && (long) balance.invoke(null, player) == 10,
+                        "A stale copy of a paid claim clears even after the inventory fills");
+
+                var nextClaim = claim.copy();
+                nextClaim.putLong("Cycle", 1L);
+                dungeon.pending.add(nextClaim);
+                Dungeons.deliver(server, dungeon);
+                h.assertTrue(dungeon.pending.contains(nextClaim) && (long) balance.invoke(null, player) == 10
+                                && player.getInventory().countItem(net.minecraft.world.item.Items.DIAMOND) == 0,
+                        "A full inventory defers new loot and rolls back the wallet credit");
+            } finally {
+                data.remove(dungeon);
+            }
+        }
         h.succeed();
     }
 }

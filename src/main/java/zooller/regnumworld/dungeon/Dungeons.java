@@ -333,7 +333,7 @@ public final class Dungeons {
             // Freeze the actual loot, not just its seed: reloads, player luck and datapacks may change.
             loot=DungeonMailbox.freeze(server,claim,loot);
             boolean paid=false;
-            try {Class<?> api=Class.forName("dev.regnum.economy.money.DungeonRewards");if(!DungeonMailbox.canFit(p,loot))continue;paid=(boolean)api.getMethod("grant",ServerPlayer.class,String.class,long.class,List.class).invoke(null,p,DungeonMailbox.receipt(d,claim),claim.getLong("Coins"),loot);}
+            try {Class<?> api=Class.forName("dev.regnum.economy.money.DungeonRewards");paid=(boolean)api.getMethod("grant",ServerPlayer.class,String.class,long.class,List.class).invoke(null,p,DungeonMailbox.receipt(d,claim),claim.getLong("Coins"),loot);}
             catch(ClassNotFoundException absent) {
                 // Standalone claims remain in the durable mailbox until explicitly claimed.
                 continue;
