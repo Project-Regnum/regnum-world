@@ -246,6 +246,25 @@ public final class DungeonServerTests implements FabricGameTest {
                 h.assertTrue(dungeon.pending.contains(nextClaim) && (long) balance.invoke(null, player) == 10
                                 && player.getInventory().countItem(net.minecraft.world.item.Items.DIAMOND) == 0,
                         "A full inventory defers new loot and rolls back the wallet credit");
+
+                player.setGameMode(net.minecraft.world.level.GameType.CREATIVE);
+                Dungeons.deliver(server, dungeon);
+                h.assertTrue(dungeon.pending.contains(nextClaim) && (long) balance.invoke(null, player) == 10,
+                        "Creative inventory overflow cannot discard loot and acknowledge a receipt");
+
+                player.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
+                player.getInventory().setItem(0, new net.minecraft.world.item.ItemStack(
+                        net.minecraft.world.item.Items.DIAMOND, 63));
+                Dungeons.deliver(server, dungeon);
+                h.assertTrue(dungeon.pending.contains(nextClaim) && (long) balance.invoke(null, player) == 10
+                                && player.getInventory().countItem(net.minecraft.world.item.Items.DIAMOND) == 63,
+                        "A partial stack has to remain unchanged when the full reward will not fit");
+
+                player.getInventory().setItem(1, net.minecraft.world.item.ItemStack.EMPTY);
+                Dungeons.deliver(server, dungeon);
+                h.assertTrue(dungeon.pending.isEmpty() && (long) balance.invoke(null, player) == 20
+                                && player.getInventory().countItem(net.minecraft.world.item.Items.DIAMOND) == 65,
+                        "After making room, the full reward is paid exactly once");
             } finally {
                 data.remove(dungeon);
             }

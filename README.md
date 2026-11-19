@@ -138,8 +138,9 @@ cd regnum-world
 The compiled mod JAR will be located at:
 `build/libs/regnum-world-1.0.0.jar`
 
-For the four-mod GameTest run, use JDK 25 for Gradle and a Java 21 toolchain
-for Minecraft. Loom 1.19.4 reads Agriculture's v2 class tweaker during the
+Run the four-mod GameTests in their own checkout so Loom keeps the standalone
+and combined launch configurations separate. Use JDK 25 for Gradle and a
+Java 21 toolchain for Minecraft. Loom 1.19.4 reads Agriculture's v2 class tweaker during the
 combined development launch. The standalone World production build uses the
 default Loom version.
 
